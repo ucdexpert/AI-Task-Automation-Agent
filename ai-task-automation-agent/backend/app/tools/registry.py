@@ -3,6 +3,7 @@ from app.tools.base import BaseTool
 from app.tools.email_tool import EmailTool
 from app.tools.web_scraper_tool import WebScraperTool
 from app.tools.file_tool import FileTool
+from app.tools.google_calendar_tool import GoogleCalendarTool
 
 class ToolRegistry:
     """
@@ -17,7 +18,8 @@ class ToolRegistry:
         tools = [
             EmailTool(),
             WebScraperTool(),
-            FileTool()
+            FileTool(),
+            GoogleCalendarTool()
         ]
         for tool in tools:
             self.register_tool(tool)

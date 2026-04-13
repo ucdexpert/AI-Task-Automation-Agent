@@ -20,6 +20,9 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  Download,
+  Search,
+  UserCircle,
 } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
@@ -43,6 +46,8 @@ export default function DashboardPage() {
   const [activities, setActivities] = useState<Task[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [sessionId] = useState(() => `session_${Date.now()}`);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'failed'>('all');
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -73,6 +78,33 @@ export default function DashboardPage() {
     logout();
     addToast('Logged out successfully', 'info');
     router.push('/login');
+  };
+
+  const exportToCSV = () => {
+    if (filteredTasks.length === 0) {
+      addToast('No tasks to export', 'error');
+      return;
+    }
+
+    const headers = ['ID', 'Status', 'Task', 'Tools Used', 'Created At', 'Completed At'];
+    const rows = filteredTasks.map((task) => [
+      task.id,
+      task.status,
+      `"${task.user_input.replace(/"/g, '""')}"`,
+      `"${task.tools_used?.join(', ') || ''}"`,
+      new Date(task.created_at).toLocaleString(),
+      task.completed_at ? new Date(task.completed_at).toLocaleString() : 'N/A',
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `tasks_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    addToast(`Exported ${filteredTasks.length} tasks to CSV`, 'success');
   };
 
   const handleRunAutomation = async () => {
@@ -111,6 +143,15 @@ export default function DashboardPage() {
     return date.toLocaleString();
   };
 
+  // Filter and search tasks
+  const filteredTasks = activities.filter((task) => {
+    const matchesSearch = searchQuery
+      ? task.user_input.toLowerCase().includes(searchQuery.toLowerCase())
+      : true;
+    const matchesFilter = filterStatus === 'all' || task.status === filterStatus;
+    return matchesSearch && matchesFilter;
+  });
+
   const quickTasks: Array<{ icons: string[]; text: string }> = [
     { icons: ['globe', 'code'], text: 'Scrape & summarize tech news' },
     { icons: ['doc'], text: 'Create a project report' },
@@ -146,6 +187,15 @@ export default function DashboardPage() {
             <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
             <span className="text-sm text-text-primary font-medium">{getFullName()}</span>
           </div>
+
+          {/* Profile */}
+          <Link
+            href="/profile"
+            className="flex items-center gap-2 px-3 h-9 border border-[rgba(255,255,255,0.08)] text-text-primary text-sm rounded-md hover:border-accent-blue transition-all"
+          >
+            <UserCircle className="w-4 h-4" />
+            Profile
+          </Link>
 
           {/* Logout */}
           <button
@@ -183,6 +233,14 @@ export default function DashboardPage() {
               <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
               <span className="text-sm text-text-primary font-medium">{getFullName()}</span>
             </div>
+            <Link
+              href="/profile"
+              className="flex items-center gap-2 px-3 py-2 border border-[rgba(255,255,255,0.08)] text-text-primary text-sm rounded-md hover:border-accent-blue transition-all"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <UserCircle className="w-4 h-4" />
+              Profile
+            </Link>
             <button
               onClick={handleLogout}
               className="text-sm text-accent-red hover:underline text-left py-2"
@@ -254,13 +312,59 @@ export default function DashboardPage() {
 
             {/* Recent Activity */}
             <div className="mt-8">
-              <h2 className="text-lg font-bold text-text-primary mb-4">Recent Activity</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-text-primary">Recent Activity</h2>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-text-muted">{filteredTasks.length} tasks</span>
+                  {filteredTasks.length > 0 && (
+                    <button
+                      onClick={exportToCSV}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-card border border-[rgba(255,255,255,0.08)] rounded-lg text-sm text-text-muted hover:text-text-primary hover:border-accent-blue transition-all"
+                      title="Export to CSV"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Search & Filter */}
+              {activities.length > 0 && (
+                <div className="mb-4 space-y-3">
+                  {/* Search Bar */}
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search tasks..."
+                    className="w-full px-4 py-2.5 bg-background border border-[rgba(255,255,255,0.08)] rounded-lg text-text-primary placeholder-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-accent-blue"
+                  />
+
+                  {/* Filter Buttons */}
+                  <div className="flex gap-2">
+                    {(['all', 'completed', 'failed'] as const).map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => setFilterStatus(status)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          filterStatus === status
+                            ? 'bg-accent-blue text-white'
+                            : 'bg-card border border-[rgba(255,255,255,0.08)] text-text-muted hover:text-text-primary'
+                        }`}
+                      >
+                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {loadingTasks ? (
                 <div className="flex items-center justify-center py-12">
                   <LoadingSpinner size="md" />
                 </div>
-              ) : activities.length === 0 ? (
+              ) : filteredTasks.length === 0 ? (
                 <div className="border-2 border-dashed border-[rgba(255,255,255,0.15)] rounded-xl p-8 text-center">
                   <p className="text-text-muted text-sm">
                     No automations yet — run your first task above
@@ -268,7 +372,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {activities.map((task) => (
+                  {filteredTasks.map((task) => (
                     <div
                       key={task.id}
                       className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-4"

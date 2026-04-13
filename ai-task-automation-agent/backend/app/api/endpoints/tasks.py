@@ -7,8 +7,12 @@ from app.schemas.task import TaskCreate, TaskResponse, TaskListResponse
 from app.agents.orchestrator import AgentOrchestrator
 from app.dependencies import get_current_user_optional, get_current_user
 from app.models.user import User
+from app.services.email_service import send_task_completion_email
 import uuid
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -48,6 +52,19 @@ async def execute_task(
     task.completed_at = datetime.utcnow()
     db.commit()
     db.refresh(task)
+
+    # Send email notification if user is authenticated and has email
+    if current_user and current_user.email:
+        try:
+            send_task_completion_email(
+                to_email=current_user.email,
+                user_name=current_user.full_name or "User",
+                task_description=task.user_input,
+                status=task.status,
+                task_id=task.id
+            )
+        except Exception as e:
+            logger.error(f"Failed to send email notification: {e}")
 
     return TaskResponse.from_orm(task)
 

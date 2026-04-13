@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
 from app.models.database import get_db
@@ -6,6 +6,7 @@ from app.models.user import User
 from app.schemas.auth import UserCreate, UserLogin, UserResponse, TokenResponse
 from app.services.auth_service import get_password_hash, verify_password, create_access_token
 from app.dependencies import get_current_user
+from app.middleware.rate_limiter import limiter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,8 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("3/minute")
+def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
     try:
         # Check if user already exists
@@ -61,7 +63,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(user_data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
     """Login user"""
     try:
         user = db.query(User).filter(User.email == user_data.email).first()

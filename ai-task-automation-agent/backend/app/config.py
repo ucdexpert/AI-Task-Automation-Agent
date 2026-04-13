@@ -5,11 +5,12 @@ load_dotenv()
 
 class Settings:
     # Application
-    APP_NAME: str = "AI Task Automation Agent"
+    APP_NAME: str = os.getenv("APP_NAME", "AI Task Automation Agent")
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    APP_ENV: str = os.getenv("APP_ENV", "development")
+    DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
     
-    # Database (SQLite by default for easy setup, PostgreSQL for production)
+    # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./agent.db")
 
     # JWT
@@ -19,16 +20,20 @@ class Settings:
     # LLM
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-    LLM_TEMPERATURE: float = 0.1
-    LLM_MAX_TOKENS: int = 2000
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "2000"))
     
-    # Email (Optional - for email tool)
+    # Email
     SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
     EMAIL_ADDRESS: str = os.getenv("EMAIL_ADDRESS", "")
     EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
     
-    # Google Calendar (Optional)
+    # Google Calendar
     GOOGLE_CALENDAR_CREDENTIALS: str = os.getenv("GOOGLE_CALENDAR_CREDENTIALS", "")
+    GOOGLE_CALENDAR_CREDENTIALS_FILE: str = os.getenv("GOOGLE_CALENDAR_CREDENTIALS_FILE", "")
+
+    # CORS
+    BACKEND_CORS_ORIGINS: list = os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
 
 settings = Settings()
