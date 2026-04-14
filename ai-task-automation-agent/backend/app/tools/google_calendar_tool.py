@@ -5,6 +5,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from app.tools.base import BaseTool
 from app.config import settings
+from app.tools.whatsapp_tool import WhatsAppTool
 
 class GoogleCalendarTool(BaseTool):
     name = "google_calendar"
@@ -108,7 +109,7 @@ class GoogleCalendarTool(BaseTool):
         summary = data.get("summary", "New Event")
         start = data.get("start_time")
         end = data.get("end_time")
-        
+
         if not start:
             # Default to now
             start = datetime.utcnow().isoformat() + 'Z'
@@ -116,20 +117,40 @@ class GoogleCalendarTool(BaseTool):
             # Default to 1 hour later
             start_dt = datetime.fromisoformat(start.replace('Z', ''))
             end = (start_dt + timedelta(hours=1)).isoformat() + 'Z'
-            
+
         event = {
             'summary': summary,
             'description': data.get("description", ""),
             'start': {'dateTime': start, 'timeZone': 'UTC'},
             'end': {'dateTime': end, 'timeZone': 'UTC'},
         }
-        
+
         event = service.events().insert(calendarId='primary', body=event).execute()
+        
+        # Send WhatsApp notification
+        whatsapp_result = None
+        try:
+            whatsapp = WhatsAppTool()
+            message = f"📅 New Event Created!\n\n"
+            message += f"📌 {summary}\n"
+            message += f"🕐 Start: {start.replace('Z', '').replace('T', ' ')}\n"
+            if end:
+                message += f"🕐 End: {end.replace('Z', '').replace('T', ' ')}\n"
+            if data.get("description"):
+                message += f"📝 {data['description']}\n"
+            message += f"\n✅ Added to your calendar"
+            
+            whatsapp_result = await whatsapp.send_text_message(message=message)
+        except Exception as e:
+            # Don't fail event creation if WhatsApp fails
+            print(f"Warning: Failed to send WhatsApp notification: {e}")
+        
         return {
-            "success": True, 
-            "message": "Event created successfully", 
+            "success": True,
+            "message": "Event created successfully",
             "event_id": event.get('id'),
-            "htmlLink": event.get('htmlLink')
+            "htmlLink": event.get('htmlLink'),
+            "whatsapp_notification": whatsapp_result
         }
 
     async def _list_events(self, service, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -159,23 +180,70 @@ class GoogleCalendarTool(BaseTool):
         event_id = data.get("event_id")
         if not event_id:
             return {"success": False, "message": "event_id is required for deletion"}
-            
+
+        # Get event details before deleting
+        try:
+            event = service.events().get(calendarId='primary', eventId=event_id).execute()
+            event_summary = event.get('summary', 'Unknown Event')
+        except:
+            event_summary = 'Unknown Event'
+
         service.events().delete(calendarId='primary', eventId=event_id).execute()
-        return {"success": True, "message": f"Event {event_id} deleted successfully"}
+        
+        # Send WhatsApp notification
+        whatsapp_result = None
+        try:
+            whatsapp = WhatsAppTool()
+            message = f"❌ Event Deleted\n\n"
+            message += f"📌 {event_summary}\n"
+            message += f"🆔 ID: {event_id}\n"
+            message += f"\n⚠️ Event removed from calendar"
+            
+            whatsapp_result = await whatsapp.send_text_message(message=message)
+        except Exception as e:
+            print(f"Warning: Failed to send WhatsApp notification: {e}")
+        
+        return {
+            "success": True, 
+            "message": f"Event {event_id} deleted successfully",
+            "whatsapp_notification": whatsapp_result
+        }
 
     async def _update_event(self, service, data: Dict[str, Any]) -> Dict[str, Any]:
         event_id = data.get("event_id")
         if not event_id:
             return {"success": False, "message": "event_id is required for update"}
-            
+
         # First get the event
         event = service.events().get(calendarId='primary', eventId=event_id).execute()
-        
+
         # Update fields if provided
         if "summary" in data: event['summary'] = data['summary']
         if "description" in data: event['description'] = data['description']
         if "start_time" in data: event['start']['dateTime'] = data['start_time']
         if "end_time" in data: event['end']['dateTime'] = data['end_time']
-        
+
         updated_event = service.events().update(calendarId='primary', eventId=event_id, body=event).execute()
-        return {"success": True, "message": "Event updated successfully", "event_id": updated_event.get('id')}
+        
+        # Send WhatsApp notification
+        whatsapp_result = None
+        try:
+            whatsapp = WhatsAppTool()
+            message = f"📅 Event Updated!\n\n"
+            message += f"📌 {event['summary']}\n"
+            if 'start' in event and 'dateTime' in event['start']:
+                message += f"🕐 Start: {event['start']['dateTime'].replace('Z', '').replace('T', ' ')}\n"
+            if 'end' in event and 'dateTime' in event['end']:
+                message += f"🕐 End: {event['end']['dateTime'].replace('Z', '').replace('T', ' ')}\n"
+            message += f"\n✅ Event updated"
+            
+            whatsapp_result = await whatsapp.send_text_message(message=message)
+        except Exception as e:
+            print(f"Warning: Failed to send WhatsApp notification: {e}")
+        
+        return {
+            "success": True, 
+            "message": "Event updated successfully", 
+            "event_id": updated_event.get('id'),
+            "whatsapp_notification": whatsapp_result
+        }

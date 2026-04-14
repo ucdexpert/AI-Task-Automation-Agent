@@ -44,7 +44,9 @@ def send_email(to_email: str, subject: str, body: str, html: bool = False) -> bo
 
 def send_task_completion_email(to_email: str, user_name: str, task_description: str, status: str, task_id: int):
     """Send task completion notification email"""
-    subject = f"Task {'Completed' if status == 'completed' else 'Failed'}: {task_description[:50]}..."
+    # Clean up description for subject (remove newlines and truncate)
+    clean_desc = task_description.replace('\n', ' ').replace('\r', '').strip()
+    subject = f"Task {'Completed' if status == 'completed' else 'Failed'}: {clean_desc[:50]}..."
     
     status_emoji = "✅" if status == "completed" else "❌"
     status_color = "#22C55E" if status == "completed" else "#EF4444"

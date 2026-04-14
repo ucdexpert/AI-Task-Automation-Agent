@@ -32,6 +32,13 @@ class Settings:
     # Google Calendar
     GOOGLE_CALENDAR_CREDENTIALS: str = os.getenv("GOOGLE_CALENDAR_CREDENTIALS", "")
     GOOGLE_CALENDAR_CREDENTIALS_FILE: str = os.getenv("GOOGLE_CALENDAR_CREDENTIALS_FILE", "")
+    
+    # WhatsApp (Meta API)
+    WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+    WHATSAPP_PHONE_NUMBER_ID: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+    WHATSAPP_WABA_ID: str = os.getenv("WHATSAPP_WABA_ID", "")
+    WHATSAPP_RECIPIENT_NUMBER: str = os.getenv("WHATSAPP_RECIPIENT_NUMBER", "")
+    WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 
     # CORS
     BACKEND_CORS_ORIGINS: list = os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")

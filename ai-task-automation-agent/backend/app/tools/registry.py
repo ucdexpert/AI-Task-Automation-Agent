@@ -4,6 +4,9 @@ from app.tools.email_tool import EmailTool
 from app.tools.web_scraper_tool import WebScraperTool
 from app.tools.file_tool import FileTool
 from app.tools.google_calendar_tool import GoogleCalendarTool
+from app.tools.whatsapp_tool import WhatsAppTool
+from app.tools.calendar_notification_tool import CalendarNotificationTool
+from app.tools.robot_tool import RobotTool
 
 class ToolRegistry:
     """
@@ -19,7 +22,10 @@ class ToolRegistry:
             EmailTool(),
             WebScraperTool(),
             FileTool(),
-            GoogleCalendarTool()
+            GoogleCalendarTool(),
+            WhatsAppTool(),
+            CalendarNotificationTool(),
+            RobotTool()
         ]
         for tool in tools:
             self.register_tool(tool)

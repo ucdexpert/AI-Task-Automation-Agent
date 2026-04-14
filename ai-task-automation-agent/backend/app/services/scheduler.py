@@ -13,15 +13,31 @@ logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 
 
+from datetime import datetime, timedelta
+from app.models.task import Task
+
 def cleanup_old_tasks():
-    """Cleanup tasks older than 30 days"""
+    """Cleanup tasks and fail stale processing tasks"""
     db = SessionLocal()
     try:
         logger.info("Running scheduled task: cleanup_old_tasks")
-        # Add your cleanup logic here
-        pass
+        
+        # 1. Fail tasks stuck in 'processing' for more than 10 minutes
+        ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
+        stale_tasks = db.query(Task).filter(
+            Task.status == "processing",
+            Task.created_at < ten_mins_ago
+        ).all()
+        
+        for task in stale_tasks:
+            task.status = "failed"
+            task.error_message = "Task timed out or system crashed during processing."
+            logger.info(f"Marked stale task #{task.id} as failed")
+            
+        db.commit()
     except Exception as e:
         logger.error(f"Error in cleanup_old_tasks: {e}")
+        db.rollback()
     finally:
         db.close()
 

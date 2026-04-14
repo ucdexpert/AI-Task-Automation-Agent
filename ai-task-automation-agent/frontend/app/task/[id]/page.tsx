@@ -55,9 +55,24 @@ export default function TaskDetailPage() {
     }
   }, [taskId]);
 
-  const loadTaskData = async () => {
+  // Add Polling for Processing Tasks
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (task?.status === 'processing') {
+      interval = setInterval(() => {
+        loadTaskData(true); // silent update
+      }, 3000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [task?.status, taskId]);
+
+  const loadTaskData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [taskData, logsData] = await Promise.all([
         getTask(taskId),
         getTaskLogs(taskId).catch(() => []),
@@ -68,11 +83,11 @@ export default function TaskDetailPage() {
       if (error.response?.status === 404) {
         addToast('Task not found', 'error');
         router.push('/dashboard');
-      } else {
+      } else if (!silent) {
         addToast('Failed to load task data', 'error');
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

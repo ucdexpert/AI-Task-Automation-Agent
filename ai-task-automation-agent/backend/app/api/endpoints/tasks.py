@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Optional
-from app.models.database import get_db
+from app.models.database import get_db, SessionLocal
 from app.models.task import Task
+from app.config import settings
 from app.schemas.task import TaskCreate, TaskResponse, TaskListResponse
-from app.agents.orchestrator import AgentOrchestrator
+from app.agents.orchestrator import MultiAgentOrchestrator
 from app.dependencies import get_current_user_optional, get_current_user
 from app.models.user import User
 from app.services.email_service import send_task_completion_email
+from app.services.websocket_service import manager
 import uuid
 from datetime import datetime
 import logging
@@ -16,15 +18,73 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
+async def run_task_background(task_id: int, session_id: str, current_user_id: Optional[int]):
+    """Background worker for processing tasks"""
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            return
+
+        # Process task with agent
+        orchestrator = MultiAgentOrchestrator(db)
+        result = await orchestrator.process_task(task, session_id)
+
+        # Update task record
+        task.status = "completed" if result["success"] else "failed"
+        task.result = result.get("result")
+        task.tools_used = result.get("tools_used", [])
+        task.error_message = result.get("error")
+        task.completed_at = datetime.utcnow()
+        db.commit()
+        db.refresh(task)
+
+        # Send final WebSocket update
+        await manager.send_personal_message({
+            "type": "task_complete",
+            "task_id": task.id,
+            "status": task.status,
+            "result": task.result
+        }, session_id)
+
+        # Send email notification
+        if current_user_id:
+            user = db.query(User).filter(User.id == current_user_id).first()
+            if user and user.email:
+                try:
+                    send_task_completion_email(
+                        to_email=user.email,
+                        user_name=user.full_name or "User",
+                        task_description=task.user_input,
+                        status=task.status,
+                        task_id=task.id
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send email notification: {e}")
+    except Exception as e:
+        logger.error(f"Error in background task: {e}")
+        # Update task status to failed so frontend stops polling
+        try:
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if task:
+                task.status = "failed"
+                task.error_message = str(e)
+                db.commit()
+        except Exception as db_err:
+            logger.error(f"Failed to update task status on error: {db_err}")
+    finally:
+        db.close()
+
 
 @router.post("/execute", response_model=TaskResponse)
 async def execute_task(
     task_data: TaskCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
-    Execute a new task using the AI agent
+    Execute a new task using the AI agent (Background Mode)
     """
     # Create session ID if not provided
     session_id = task_data.session_id or str(uuid.uuid4())
@@ -40,31 +100,13 @@ async def execute_task(
     db.commit()
     db.refresh(task)
 
-    # Process task with agent
-    orchestrator = AgentOrchestrator(db)
-    result = await orchestrator.process_task(task, session_id)
-
-    # Update task record
-    task.status = "completed" if result["success"] else "failed"
-    task.result = result.get("result")
-    task.tools_used = result.get("tools_used", [])
-    task.error_message = result.get("error")
-    task.completed_at = datetime.utcnow()
-    db.commit()
-    db.refresh(task)
-
-    # Send email notification if user is authenticated and has email
-    if current_user and current_user.email:
-        try:
-            send_task_completion_email(
-                to_email=current_user.email,
-                user_name=current_user.full_name or "User",
-                task_description=task.user_input,
-                status=task.status,
-                task_id=task.id
-            )
-        except Exception as e:
-            logger.error(f"Failed to send email notification: {e}")
+    # Start task in background
+    background_tasks.add_task(
+        run_task_background, 
+        task.id, 
+        session_id, 
+        current_user.id if current_user else None
+    )
 
     return TaskResponse.from_orm(task)
 
