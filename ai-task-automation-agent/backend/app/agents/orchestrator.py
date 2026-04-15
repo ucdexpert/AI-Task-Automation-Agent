@@ -10,6 +10,9 @@ from app.agents.memory import AgentMemory
 from app.models.task import Task, AgentLog
 from app.services.websocket_service import manager
 from app.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MultiAgentOrchestrator:
     """
@@ -42,11 +45,12 @@ class MultiAgentOrchestrator:
             {"role": "user", "content": task.user_input}
         ]
         
-        # 3. Execution Loop (Max 10 steps)
+        # 3. Execution Loop (Limit to 3 turns for free-tier safety)
         step_number = 0
         final_result = None
+        executed_tool_signatures = set()
         
-        while step_number < 10:
+        while step_number < 2:
             step_number += 1
             step_start = time.time()
             
@@ -56,23 +60,38 @@ class MultiAgentOrchestrator:
             )
             
             if hasattr(llm_response, 'tool_calls') and llm_response.tool_calls:
-                for tool_call in llm_response.tool_calls:
+                tool_error_occurred = False
+                for tool_call in llm_response.tool_calls[:2]:
                     tool_name = tool_call.function.name
                     tool_args = json.loads(tool_call.function.arguments)
                     
+                    # STRICT: Handle duplicate tool calls
+                    tool_signature = f"{tool_name}_{json.dumps(tool_args, sort_keys=True)}"
+                    if tool_signature in executed_tool_signatures:
+                        logger.warning(f"Blocking duplicate tool call: {tool_signature}")
+                        # Tell the LLM this is already done so it doesn't get stuck
+                        messages.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
+                        messages.append({
+                            "role": "tool", 
+                            "tool_call_id": tool_call.id, 
+                            "content": json.dumps({"success": True, "message": "This action was already performed successfully. Do not repeat it."})
+                        })
+                        continue
+                    
+                    executed_tool_signatures.add(tool_signature)
+                    
                     # Logic to ensure correct phone number for WhatsApp
                     if tool_name == "whatsapp":
-                        # If Agent sends a placeholder like 'wa_XXXX' or 'user_phone_number'
-                        current_to = tool_args.get("to_number", "")
-                        if not current_to or "XXXX" in current_to or "phone" in current_to:
+                        current_to = str(tool_args.get("to_number", ""))
+                        # If number is fake, missing, or a placeholder
+                        if not current_to or len(current_to) < 10 or "XXXX" in current_to or "12345" in current_to:
                             if is_whatsapp:
                                 tool_args["to_number"] = session_id.replace("wa_", "")
                             else:
                                 tool_args["to_number"] = settings.WHATSAPP_RECIPIENT_NUMBER
                         
-                        # Ensure no 'wa_' prefix in the final number sent to Meta
-                        if isinstance(tool_args["to_number"], str):
-                            tool_args["to_number"] = tool_args["to_number"].replace("wa_", "")
+                        # Strip any 'wa_' if still present
+                        tool_args["to_number"] = str(tool_args["to_number"]).replace("wa_", "")
 
                     # Send real-time update via WebSocket
                     await manager.send_personal_message({
@@ -110,6 +129,12 @@ class MultiAgentOrchestrator:
                         "status": log_entry.status,
                         "result": result
                     }, session_id)
+
+                    # CRITICAL: If tool failed, STOP everything
+                    if not result.get("success", False):
+                        final_result = f"Task stopped due to error in {tool_name}: {result.get('message', 'Unknown error')}"
+                        tool_error_occurred = True
+                        break
                     
                     tools_used.append(tool_name)
                     logs.append({"step": step_number, "tool": tool_name, "result": result})
@@ -117,12 +142,20 @@ class MultiAgentOrchestrator:
                     # Feed tool output back to LLM
                     messages.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
                     messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(result)})
+                
+                # Break the outer while loop if a tool failed
+                if tool_error_occurred:
+                    break
             else:
                 final_result = llm_response.content
                 break
         
-        # 4. Save Final Memory
-        self.memory.add_message(session_id=session_id, role="assistant", message=final_result)
+        # 4. Save Final Memory (Only if message is not None)
+        if final_result:
+            self.memory.add_message(session_id=session_id, role="assistant", message=final_result)
+        else:
+            logger.warning(f"Assistant generated an empty response for session {session_id}")
+            final_result = "Task completed via tools, but no final summary was generated."
         
         return {
             "success": True,

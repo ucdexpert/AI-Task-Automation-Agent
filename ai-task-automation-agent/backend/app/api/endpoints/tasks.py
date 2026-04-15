@@ -63,6 +63,8 @@ async def run_task_background(task_id: int, session_id: str, current_user_id: Op
                     logger.error(f"Failed to send email notification: {e}")
     except Exception as e:
         logger.error(f"Error in background task: {e}")
+        # Rollback the failed transaction first!
+        db.rollback()
         # Update task status to failed so frontend stops polling
         try:
             task = db.query(Task).filter(Task.id == task_id).first()
