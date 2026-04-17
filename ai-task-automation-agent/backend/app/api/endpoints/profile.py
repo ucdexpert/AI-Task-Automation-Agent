@@ -53,7 +53,7 @@ def update_profile(
     db.refresh(current_user)
 
     logger.info(f"Profile updated for user {current_user.id}")
-    return UserResponse.from_orm(current_user)
+    return UserResponse.model_validate(current_user)
 
 
 @router.post("/change-password")

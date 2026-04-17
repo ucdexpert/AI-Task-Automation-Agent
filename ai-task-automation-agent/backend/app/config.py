@@ -41,6 +41,9 @@ class Settings:
     WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 
     # CORS
-    BACKEND_CORS_ORIGINS: list = os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
+    BACKEND_CORS_ORIGINS: list = [
+        origin.strip() 
+        for origin in os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
+    ]
 
 settings = Settings()

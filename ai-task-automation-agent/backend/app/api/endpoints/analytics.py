@@ -79,7 +79,7 @@ def get_logs(
         .all()
     )
     
-    return [AgentLogResponse.from_orm(log) for log in logs]
+    return [AgentLogResponse.model_validate(log) for log in logs]
 
 @router.get("/logs/{task_id}", response_model=List[AgentLogResponse])
 def get_task_logs(task_id: int, db: Session = Depends(get_db)):
@@ -93,4 +93,4 @@ def get_task_logs(task_id: int, db: Session = Depends(get_db)):
         .all()
     )
     
-    return [AgentLogResponse.from_orm(log) for log in logs]
+    return [AgentLogResponse.model_validate(log) for log in logs]

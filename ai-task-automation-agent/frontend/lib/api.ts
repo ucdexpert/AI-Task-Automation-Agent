@@ -23,12 +23,20 @@ api.interceptors.request.use((config) => {
 // ==========================================
 export const loginApi = async (email: string, password: string) => {
   const response = await api.post('/api/auth/login', { email, password });
-  return response.data;
+  const { access_token, user } = response.data;
+  if (typeof window !== 'undefined' && access_token) {
+    localStorage.setItem('token', access_token);
+  }
+  return { token: access_token, user };
 };
 
 export const registerApi = async (email: string, password: string, fullName?: string) => {
   const response = await api.post('/api/auth/register', { email, password, full_name: fullName });
-  return response.data;
+  const { access_token, user } = response.data;
+  if (typeof window !== 'undefined' && access_token) {
+    localStorage.setItem('token', access_token);
+  }
+  return { token: access_token, user };
 };
 
 export const getCurrentUser = async () => {

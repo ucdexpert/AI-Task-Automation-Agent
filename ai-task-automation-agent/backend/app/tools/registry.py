@@ -2,6 +2,7 @@ from typing import Dict, List, Any
 from app.tools.base import BaseTool
 from app.tools.email_tool import EmailTool
 from app.tools.web_scraper_tool import WebScraperTool
+from app.tools.web_search_tool import WebSearchTool
 from app.tools.file_tool import FileTool
 from app.tools.google_calendar_tool import GoogleCalendarTool
 from app.tools.whatsapp_tool import WhatsAppTool
@@ -21,6 +22,7 @@ class ToolRegistry:
         tools = [
             EmailTool(),
             WebScraperTool(),
+            WebSearchTool(),
             FileTool(),
             GoogleCalendarTool(),
             WhatsAppTool(),

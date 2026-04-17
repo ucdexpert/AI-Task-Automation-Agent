@@ -4,6 +4,7 @@ import './globals.css'
 import { AuthProvider } from '@/lib/auth'
 import { ToastProvider } from '@/lib/toast'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
+import QueryProvider from '@/lib/query-provider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,9 +22,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <ErrorBoundary>
-          <AuthProvider>
-            <ToastProvider>{children}</ToastProvider>
-          </AuthProvider>
+          <QueryProvider>
+            <AuthProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </AuthProvider>
+          </QueryProvider>
         </ErrorBoundary>
       </body>
     </html>

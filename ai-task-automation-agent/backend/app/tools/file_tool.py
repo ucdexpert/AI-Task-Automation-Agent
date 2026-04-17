@@ -39,11 +39,19 @@ class FileTool(BaseTool):
         """
         try:
             # Create documents directory if it doesn't exist
-            docs_dir = "documents"
+            docs_dir = os.path.abspath("documents")
             if not os.path.exists(docs_dir):
                 os.makedirs(docs_dir)
             
-            full_path = os.path.join(docs_dir, file_path)
+            # Security: Prevent path traversal
+            target_path = os.path.abspath(os.path.join(docs_dir, file_path))
+            if not target_path.startswith(docs_dir):
+                return {
+                    "success": False,
+                    "message": "Security error: Path traversal attempt detected."
+                }
+            
+            full_path = target_path
             
             if operation == "write":
                 # Add extension if not present

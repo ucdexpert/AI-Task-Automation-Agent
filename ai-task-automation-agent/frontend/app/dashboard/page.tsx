@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 import { getTasks, executeTask } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   Bot,
@@ -37,42 +38,49 @@ interface Task {
 }
 
 export default function DashboardPage() {
-  const { user, logout, isAuthenticated, isLoading } = useAuth();
+  const { user, logout, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const { addToast } = useToast();
+  const queryClient = useQueryClient();
+  
   const [taskText, setTaskText] = useState('');
-  const [runningTask, setRunningTask] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activities, setActivities] = useState<Task[]>([]);
-  const [loadingTasks, setLoadingTasks] = useState(true);
   const [sessionId] = useState(() => `session_${Date.now()}`);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'failed'>('all');
 
+  // TanStack Query for fetching tasks
+  const { data: tasksData, isLoading: tasksLoading } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: () => getTasks(0, 50),
+    enabled: isAuthenticated,
+    refetchInterval: 5000,
+  });
+
+  const activities = (tasksData?.tasks || []).sort((a: Task, b: Task) => 
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  // TanStack Mutation for executing task
+  const executeMutation = useMutation({
+    mutationFn: (text: string) => executeTask(text, sessionId),
+    onSuccess: (result) => {
+      addToast('Task started successfully!', 'success');
+      setTaskText('');
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      router.push(`/task/${result.id}`);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Task execution failed';
+      addToast(message, 'error');
+    }
+  });
+
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       router.push('/login');
     }
-  }, [isAuthenticated, isLoading, router]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadTasks();
-    }
-  }, [isAuthenticated]);
-
-  const loadTasks = async () => {
-    try {
-      setLoadingTasks(true);
-      const data = await getTasks(0, 10);
-      setActivities(data.tasks || []);
-    } catch (error) {
-      console.error('Failed to load tasks:', error);
-      addToast('Failed to load tasks', 'error');
-    } finally {
-      setLoadingTasks(false);
-    }
-  };
+  }, [isAuthenticated, authLoading, router]);
 
   const handleLogout = () => {
     logout();
@@ -107,24 +115,9 @@ export default function DashboardPage() {
     addToast(`Exported ${filteredTasks.length} tasks to CSV`, 'success');
   };
 
-  const handleRunAutomation = async () => {
+  const handleRunAutomation = () => {
     if (!taskText.trim()) return;
-    
-    setRunningTask(true);
-    try {
-      const result = await executeTask(taskText, sessionId);
-      addToast('Task completed successfully!', 'success');
-      setTaskText('');
-      await loadTasks();
-      
-      // Navigate to task detail
-      router.push(`/task/${result.id}`);
-    } catch (error: any) {
-      const message = error.response?.data?.detail || 'Task execution failed';
-      addToast(message, 'error');
-    } finally {
-      setRunningTask(false);
-    }
+    executeMutation.mutate(taskText);
   };
 
   const handleQuickTask = (task: string) => {
@@ -144,7 +137,7 @@ export default function DashboardPage() {
   };
 
   // Filter and search tasks
-  const filteredTasks = activities.filter((task) => {
+  const filteredTasks = activities.filter((task: Task) => {
     const matchesSearch = searchQuery
       ? task.user_input.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
@@ -161,7 +154,7 @@ export default function DashboardPage() {
   return (
     <>
       {/* Loading State */}
-      {isLoading ? (
+      {authLoading ? (
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-4 border-accent-blue border-t-transparent rounded-full animate-spin"></div>
@@ -261,6 +254,28 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <div className="px-4 md:px-6 py-6">
+        {/* Analytics Overview Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="bg-card border border-[rgba(255,255,255,0.08)] rounded-xl p-4">
+            <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Total Tasks</p>
+            <h3 className="text-2xl font-bold text-text-primary">{activities.length}</h3>
+          </div>
+          <div className="bg-card border border-[rgba(255,255,255,0.08)] rounded-xl p-4">
+            <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Success Rate</p>
+            <h3 className="text-2xl font-bold text-accent-green">
+              {activities.length > 0 
+                ? Math.round((activities.filter(t => t.status === 'completed').length / activities.length) * 100) 
+                : 0}%
+            </h3>
+          </div>
+          <div className="bg-card border border-[rgba(255,255,255,0.08)] rounded-xl p-4">
+            <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Active Now</p>
+            <h3 className="text-2xl font-bold text-yellow-500">
+              {activities.filter(t => t.status === 'processing').length}
+            </h3>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
           {/* Left Column */}
           <div className="space-y-6">
@@ -288,14 +303,14 @@ export default function DashboardPage() {
 
                 <button
                   onClick={handleRunAutomation}
-                  disabled={!taskText.trim() || runningTask}
+                  disabled={!taskText.trim() || executeMutation.isPending}
                   className={`h-11 px-5 rounded-lg font-medium flex items-center gap-2 transition-all duration-200 ${
-                    taskText.trim() && !runningTask
+                    taskText.trim() && !executeMutation.isPending
                       ? 'bg-gradient-to-r from-accent-blue to-accent-blueDark text-white hover:opacity-90'
                       : 'bg-[#374151] text-text-muted cursor-not-allowed'
                   }`}
                 >
-                  {runningTask ? (
+                  {executeMutation.isPending ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
                       <span>Running...</span>
@@ -360,7 +375,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {loadingTasks ? (
+              {tasksLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <LoadingSpinner size="md" />
                 </div>
@@ -372,7 +387,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredTasks.map((task) => (
+                  {filteredTasks.map((task: Task) => (
                     <div
                       key={task.id}
                       className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-4"

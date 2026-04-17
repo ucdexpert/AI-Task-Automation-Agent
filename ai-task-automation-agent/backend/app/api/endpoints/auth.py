@@ -42,7 +42,7 @@ def register(request: Request, user_data: UserCreate, db: Session = Depends(get_
 
         return TokenResponse(
             access_token=access_token,
-            user=UserResponse.from_orm(user)
+            user=UserResponse.model_validate(user)
         )
     except OperationalError as e:
         logger.error(f"Database operational error during register: {str(e)}")
@@ -84,7 +84,7 @@ def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db))
 
         return TokenResponse(
             access_token=access_token,
-            user=UserResponse.from_orm(user)
+            user=UserResponse.model_validate(user)
         )
     except OperationalError as e:
         logger.error(f"Database operational error during login: {str(e)}")
@@ -107,4 +107,4 @@ def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db))
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     """Get current user info"""
-    return UserResponse.from_orm(current_user)
+    return UserResponse.model_validate(current_user)

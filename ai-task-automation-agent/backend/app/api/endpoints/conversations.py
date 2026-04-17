@@ -22,7 +22,7 @@ def create_conversation(conv_data: ConversationCreate, db: Session = Depends(get
     db.commit()
     db.refresh(conversation)
     
-    return ConversationResponse.from_orm(conversation)
+    return ConversationResponse.model_validate(conversation)
 
 @router.get("/{session_id}", response_model=List[ConversationResponse])
 def get_conversation_history(
@@ -43,4 +43,4 @@ def get_conversation_history(
         .all()
     )
     
-    return [ConversationResponse.from_orm(c) for c in conversations]
+    return [ConversationResponse.model_validate(c) for c in conversations]

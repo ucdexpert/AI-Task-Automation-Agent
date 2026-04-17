@@ -5,16 +5,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from app.models.database import SessionLocal
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from app.models.task import Task
 
 logger = logging.getLogger(__name__)
 
 # Global scheduler instance
 scheduler = BackgroundScheduler()
-
-
-from datetime import datetime, timedelta
-from app.models.task import Task
 
 def cleanup_old_tasks():
     """Cleanup tasks and fail stale processing tasks"""
@@ -23,7 +20,7 @@ def cleanup_old_tasks():
         logger.info("Running scheduled task: cleanup_old_tasks")
         
         # 1. Fail tasks stuck in 'processing' for more than 10 minutes
-        ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
+        ten_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=10)
         stale_tasks = db.query(Task).filter(
             Task.status == "processing",
             Task.created_at < ten_mins_ago

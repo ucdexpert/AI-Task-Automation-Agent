@@ -1,11 +1,14 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from app.tools.base import BaseTool
 from app.config import settings
 from app.tools.whatsapp_tool import WhatsAppTool
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GoogleCalendarTool(BaseTool):
     name = "google_calendar"
@@ -25,7 +28,6 @@ class GoogleCalendarTool(BaseTool):
         if settings.GOOGLE_CALENDAR_CREDENTIALS_FILE:
             try:
                 with open(settings.GOOGLE_CALENDAR_CREDENTIALS_FILE, 'r') as f:
-                    import json
                     creds_dict = json.load(f)
             except Exception as e:
                 raise ValueError(f"Failed to load credentials file: {str(e)}")
@@ -33,7 +35,6 @@ class GoogleCalendarTool(BaseTool):
         # Fallback to .env string
         if not creds_dict and settings.GOOGLE_CALENDAR_CREDENTIALS:
             try:
-                import json
                 creds_dict = json.loads(settings.GOOGLE_CALENDAR_CREDENTIALS)
             except Exception as e:
                 raise ValueError(f"Failed to parse credentials from .env: {str(e)}")
@@ -112,11 +113,11 @@ class GoogleCalendarTool(BaseTool):
 
         if not start:
             # Default to now
-            start = datetime.utcnow().isoformat() + 'Z'
+            start = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         if not end:
             # Default to 1 hour later
-            start_dt = datetime.fromisoformat(start.replace('Z', ''))
-            end = (start_dt + timedelta(hours=1)).isoformat() + 'Z'
+            start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+            end = (start_dt + timedelta(hours=1)).isoformat().replace('+00:00', 'Z')
 
         event = {
             'summary': summary,
@@ -142,8 +143,7 @@ class GoogleCalendarTool(BaseTool):
             
             whatsapp_result = await whatsapp.send_text_message(message=message)
         except Exception as e:
-            # Don't fail event creation if WhatsApp fails
-            print(f"Warning: Failed to send WhatsApp notification: {e}")
+            logger.warning(f"Failed to send WhatsApp notification: {e}")
         
         return {
             "success": True,
@@ -155,7 +155,7 @@ class GoogleCalendarTool(BaseTool):
 
     async def _list_events(self, service, data: Dict[str, Any]) -> Dict[str, Any]:
         max_results = data.get("max_results", 10)
-        now = datetime.utcnow().isoformat() + 'Z'
+        now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         
         events_result = service.events().list(
             calendarId='primary', timeMin=now,
@@ -185,7 +185,7 @@ class GoogleCalendarTool(BaseTool):
         try:
             event = service.events().get(calendarId='primary', eventId=event_id).execute()
             event_summary = event.get('summary', 'Unknown Event')
-        except:
+        except Exception:
             event_summary = 'Unknown Event'
 
         service.events().delete(calendarId='primary', eventId=event_id).execute()
@@ -201,7 +201,7 @@ class GoogleCalendarTool(BaseTool):
             
             whatsapp_result = await whatsapp.send_text_message(message=message)
         except Exception as e:
-            print(f"Warning: Failed to send WhatsApp notification: {e}")
+            logger.warning(f"Failed to send WhatsApp notification: {e}")
         
         return {
             "success": True, 
@@ -239,7 +239,7 @@ class GoogleCalendarTool(BaseTool):
             
             whatsapp_result = await whatsapp.send_text_message(message=message)
         except Exception as e:
-            print(f"Warning: Failed to send WhatsApp notification: {e}")
+            logger.warning(f"Failed to send WhatsApp notification: {e}")
         
         return {
             "success": True, 

@@ -67,25 +67,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await loginApi(email, password);
-    const { access_token, user: userData } = response;
+    const { token, user: userData } = await loginApi(email, password);
 
-    setToken(access_token);
+    setToken(token);
     setUser(userData);
-    localStorage.setItem('token', access_token);
+    localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
-    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   };
 
   const register = async (email: string, password: string, fullName?: string) => {
-    const response = await registerApi(email, password, fullName);
-    const { access_token, user: userData } = response;
+    const { token, user: userData } = await registerApi(email, password, fullName);
 
-    setToken(access_token);
+    setToken(token);
     setUser(userData);
-    localStorage.setItem('token', access_token);
+    localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
-    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   };
 
   const logout = () => {

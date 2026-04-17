@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useToast } from '@/lib/toast';
 import { getTask, deleteTask, getTaskLogs } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle,
   XCircle,
@@ -12,7 +13,14 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Clock,
+  Terminal,
+  Activity,
+  FileText,
+  AlertCircle,
+  Rocket
 } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 interface TaskData {
   id: number;
@@ -41,100 +49,77 @@ export default function TaskDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { addToast } = useToast();
-  const [task, setTask] = useState<TaskData | null>(null);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedLogs, setExpandedLogs] = useState<{ [key: number]: boolean }>({});
-  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({});
-
+  const queryClient = useQueryClient();
   const taskId = Number(params.id);
 
-  useEffect(() => {
-    if (taskId) {
-      loadTaskData();
-    }
-  }, [taskId]);
+  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({});
 
-  // Add Polling for Processing Tasks
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
+  // 1. Fetch Task Details with automatic polling if processing
+  const { data: task, isLoading: taskLoading, error: taskError } = useQuery({
+    queryKey: ['task', taskId],
+    queryFn: () => getTask(taskId),
+    refetchInterval: (query) => {
+      // @ts-ignore
+      return query.state.data?.status === 'processing' ? 3000 : false;
+    },
+    enabled: !!taskId,
+  });
 
-    if (task?.status === 'processing') {
-      interval = setInterval(() => {
-        loadTaskData(true); // silent update
-      }, 3000);
-    }
+  // 2. Fetch Task Logs
+  const { data: logs = [], isLoading: logsLoading } = useQuery({
+    queryKey: ['logs', taskId],
+    queryFn: () => getTaskLogs(taskId),
+    enabled: !!taskId,
+    refetchInterval: (query) => {
+      return task?.status === 'processing' ? 3000 : false;
+    },
+  });
 
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [task?.status, taskId]);
-
-  const loadTaskData = async (silent = false) => {
-    try {
-      if (!silent) setLoading(true);
-      const [taskData, logsData] = await Promise.all([
-        getTask(taskId),
-        getTaskLogs(taskId).catch(() => []),
-      ]);
-      setTask(taskData);
-      setLogs(logsData || []);
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        addToast('Task not found', 'error');
-        router.push('/dashboard');
-      } else if (!silent) {
-        addToast('Failed to load task data', 'error');
-      }
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  };
-
-  const toggleLog = (step: number) => {
-    setExpandedLogs((prev) => ({ ...prev, [step]: !prev[step] }));
-  };
-
-  const toggleSection = (section: string) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const handleDelete = async () => {
-    try {
-      await deleteTask(taskId);
+  // 3. Delete Mutation
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTask(taskId),
+    onSuccess: () => {
       addToast('Task deleted successfully', 'success');
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       router.push('/dashboard');
-    } catch (error: any) {
+    },
+    onError: (error: any) => {
       const message = error.response?.data?.detail || 'Failed to delete task';
       addToast(message, 'error');
     }
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   const handleBack = () => {
     router.push('/dashboard');
   };
 
-  if (loading) {
+  if (taskLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-accent-blue animate-spin" />
-          <p className="text-text-muted text-sm">Loading task...</p>
+          <LoadingSpinner size="lg" />
+          <p className="text-text-muted text-sm">Fetching task details...</p>
         </div>
       </div>
     );
   }
 
-  if (!task) {
+  if (taskError || !task) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-text-muted">Task not found</p>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4 text-center">
+        <div className="max-w-md">
+          <AlertCircle className="w-12 h-12 text-accent-red mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-text-primary mb-2">Task Not Found</h2>
+          <p className="text-text-muted mb-6">The task you're looking for doesn't exist or has been deleted.</p>
           <button
             onClick={handleBack}
-            className="mt-4 px-4 py-2 bg-accent-blue text-white rounded-lg hover:opacity-90"
+            className="px-6 py-2.5 bg-accent-blue text-white rounded-lg font-medium hover:opacity-90 transition-all"
           >
-            Go to Dashboard
+            Return to Dashboard
           </button>
         </div>
       </div>
@@ -142,210 +127,254 @@ export default function TaskDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 md:px-6 py-6">
-      <div className="max-w-[860px] mx-auto">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary">Task #{task.id}</h1>
-            <p className="text-sm text-text-muted mt-1">{new Date(task.created_at).toLocaleString()}</p>
-          </div>
+    <div className="min-h-screen bg-background px-4 md:px-6 py-8">
+      <div className="max-w-[900px] mx-auto">
+        {/* Breadcrumbs & Navigation */}
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors text-sm font-medium group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            Back to Dashboard
+          </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
-              onClick={handleBack}
-              className="flex items-center gap-2 px-3 h-9 border border-text-primary text-text-primary text-sm rounded-md hover:bg-text-primary hover:text-background transition-all"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2 bg-accent-red/10 text-accent-red hover:bg-accent-red/20 disabled:opacity-50 text-sm font-bold rounded-lg transition-all"
             >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-2 px-3 h-9 bg-accent-red text-white text-sm rounded-md hover:opacity-90 transition-all"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete Task
             </button>
           </div>
         </div>
 
-        {/* Card 1: Status */}
-        <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5 mb-4">
-          <div className="flex items-center gap-2">
-            {task.status === 'completed' ? (
-              <>
-                <CheckCircle className="w-5 h-5 text-accent-green" />
-                <span className="text-[15px] font-medium text-accent-green">Completed</span>
-              </>
-            ) : task.status === 'failed' ? (
-              <>
-                <XCircle className="w-5 h-5 text-accent-red" />
-                <span className="text-[15px] font-medium text-accent-red">Failed</span>
-              </>
-            ) : (
-              <>
-                <Loader2 className="w-5 h-5 text-yellow-500 animate-spin" />
-                <span className="text-[15px] font-medium text-yellow-500">Processing</span>
-              </>
+        {/* Task Title & Status Header */}
+        <div className="bg-card rounded-2xl border border-[rgba(255,255,255,0.08)] p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-2xl font-bold text-text-primary">Task #{task.id}</h1>
+                <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                  task.status === 'completed' ? 'bg-accent-green/10 text-accent-green' :
+                  task.status === 'failed' ? 'bg-accent-red/10 text-accent-red' :
+                  'bg-yellow-500/10 text-yellow-500'
+                }`}>
+                  {task.status === 'completed' && <CheckCircle className="w-3.5 h-3.5" />}
+                  {task.status === 'failed' && <XCircle className="w-3.5 h-3.5" />}
+                  {task.status === 'processing' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {task.status.toUpperCase()}
+                </div>
+              </div>
+              <p className="text-sm text-text-muted flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5" />
+                Started on {new Date(task.created_at).toLocaleString()}
+              </p>
+            </div>
+            
+            {task.completed_at && (
+              <div className="text-left md:text-right">
+                <p className="text-xs text-text-muted mb-1 uppercase tracking-wider font-semibold">Completed in</p>
+                <p className="text-sm text-text-primary font-mono">
+                  {Math.round((new Date(task.completed_at).getTime() - new Date(task.created_at).getTime()) / 1000)}s
+                </p>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Card 2: Task Description */}
-        <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5 mb-4">
-          <h2 className="text-[15px] font-medium text-text-primary mb-3">Task Description</h2>
-          <div className="border-t border-[rgba(255,255,255,0.08)] pt-3">
-            <p className="text-sm text-text-muted leading-[1.7]">{task.user_input}</p>
-          </div>
-        </div>
-
-        {/* Card 3: Result */}
-        {task.result && (
-          <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5 mb-4">
-            <h2 className="text-[15px] font-medium text-text-primary mb-3">Result</h2>
-            <div className="border-t border-[rgba(255,255,255,0.08)] pt-3">
-              <div className="bg-background rounded-lg p-4 overflow-x-auto">
-                <pre className="text-[13px] text-[#94A3B8] font-mono leading-[1.6] whitespace-pre-wrap">
-                  {task.result}
-                </pre>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Main Content (2/3) */}
+          <div className="md:col-span-2 space-y-6">
+            {/* Task Description */}
+            <div className="bg-card rounded-2xl border border-[rgba(255,255,255,0.08)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[rgba(255,255,255,0.08)] bg-white/[0.02] flex items-center gap-2">
+                <FileText className="w-4 h-4 text-accent-blue" />
+                <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">Instruction</h2>
+              </div>
+              <div className="p-6">
+                <p className="text-text-primary text-[15px] leading-relaxed whitespace-pre-wrap">
+                  {task.user_input}
+                </p>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Error Message */}
-        {task.error_message && (
-          <div className="bg-card rounded-xl border border-accent-red p-5 mb-4">
-            <h2 className="text-[15px] font-medium text-accent-red mb-3">Error</h2>
-            <div className="border-t border-accent-red pt-3">
-              <p className="text-sm text-text-muted">{task.error_message}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Card 4: Task Details */}
-        <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5 mb-4">
-          <h2 className="text-[15px] font-medium text-text-primary mb-3">Task Details</h2>
-          <div className="border-t border-[rgba(255,255,255,0.08)] pt-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-xs text-text-muted mb-1">Created</p>
-                <p className="text-sm text-text-primary">{new Date(task.created_at).toLocaleString()}</p>
-              </div>
-              {task.completed_at && (
-                <div>
-                  <p className="text-xs text-text-muted mb-1">Completed</p>
-                  <p className="text-sm text-text-primary">{new Date(task.completed_at).toLocaleString()}</p>
+            {/* Final Result */}
+            {(task.result || task.error_message) && (
+              <div className={`bg-card rounded-2xl border overflow-hidden ${
+                task.status === 'failed' ? 'border-accent-red/30' : 'border-[rgba(255,255,255,0.08)]'
+              }`}>
+                <div className="px-6 py-4 border-b border-[rgba(255,255,255,0.08)] bg-white/[0.02] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-accent-green" />
+                    <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">Output</h2>
+                  </div>
+                  {task.status === 'completed' && (
+                    <span className="text-[10px] bg-accent-green/20 text-accent-green px-2 py-0.5 rounded font-bold">FINAL</span>
+                  )}
                 </div>
-              )}
-              <div>
-                <p className="text-xs text-text-muted mb-1">Session ID</p>
-                <p className="text-sm text-text-primary">{task.id || 'N/A'}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 5: Tools Used */}
-        {task.tools_used && task.tools_used.length > 0 && (
-          <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5 mb-4">
-            <h2 className="text-[15px] font-medium text-text-primary mb-3">Tools Used</h2>
-            <div className="border-t border-[rgba(255,255,255,0.08)] pt-3">
-              <div className="flex flex-wrap gap-2">
-                {task.tools_used.map((tool) => (
-                  <span
-                    key={tool}
-                    className="inline-block px-3 py-1 bg-[#1E3A5F] text-[#60A5FA] text-xs rounded-full"
-                  >
-                    {tool}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Card 6: Execution Logs */}
-        <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5 mb-4">
-          <h2 className="text-[15px] font-medium text-text-primary mb-3">Execution Logs</h2>
-          <div className="border-t border-[rgba(255,255,255,0.08)] pt-3">
-            {logs.length === 0 ? (
-              <p className="text-sm text-text-muted text-center py-8">No execution logs available</p>
-            ) : (
-              <div className="space-y-3">
-                {logs.map((log) => (
-                  <div key={log.id} className="bg-background rounded-lg p-4">
-                    {/* Step Header */}
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-text-primary">Step #{log.step_number}</span>
-                        <span className="px-2 py-0.5 bg-[#14532D] text-[#4ADE80] text-[11px] rounded-full">
-                          {log.status}
-                        </span>
-                      </div>
-                    </div>
-
-                    <p className="text-sm text-text-muted mb-3">
-                      Action: <span className="text-text-primary">{log.action}</span>
-                    </p>
-
-                    {/* Collapsible Input Data */}
-                    {log.input_data && (
-                      <div className="mb-2">
-                        <button
-                          onClick={() => toggleSection(`input-${log.id}`)}
-                          className="flex items-center gap-2 text-sm text-text-muted hover:text-text-primary transition-colors w-full"
-                        >
-                          {expandedSections[`input-${log.id}`] ? (
-                            <ChevronDown className="w-4 h-4" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4" />
-                          )}
-                          Input Data
-                        </button>
-                        {expandedSections[`input-${log.id}`] && (
-                          <div className="mt-2 bg-card rounded-lg p-3 overflow-x-auto">
-                            <pre className="text-xs text-[#94A3B8] font-mono">
-                              {JSON.stringify(log.input_data, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Collapsible Output Data */}
-                    {log.output_data && (
-                      <div className="mb-2">
-                        <button
-                          onClick={() => toggleSection(`output-${log.id}`)}
-                          className="flex items-center gap-2 text-sm text-text-muted hover:text-text-primary transition-colors w-full"
-                        >
-                          {expandedSections[`output-${log.id}`] ? (
-                            <ChevronDown className="w-4 h-4" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4" />
-                          )}
-                          Output Data
-                        </button>
-                        {expandedSections[`output-${log.id}`] && (
-                          <div className="mt-2 bg-card rounded-lg p-3 overflow-x-auto">
-                            <pre className="text-xs text-[#94A3B8] font-mono">
-                              {JSON.stringify(log.output_data, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {log.execution_time_ms && (
-                      <p className="text-xs text-text-muted mt-3">
-                        Execution time: {(log.execution_time_ms / 1000).toFixed(1)}s
+                <div className="p-6">
+                  {task.error_message ? (
+                    <div className="bg-accent-red/5 rounded-xl p-4 border border-accent-red/10 text-accent-red text-sm">
+                      <p className="font-bold mb-1 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        Execution Error
                       </p>
+                      {task.error_message}
+                    </div>
+                  ) : (
+                    <div className="bg-background/50 rounded-xl p-5 border border-[rgba(255,255,255,0.05)]">
+                      <p className="text-text-primary text-[15px] leading-relaxed whitespace-pre-wrap">
+                        {task.result}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Execution Logs */}
+            <div className="bg-card rounded-2xl border border-[rgba(255,255,255,0.08)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[rgba(255,255,255,0.08)] bg-white/[0.02] flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-yellow-500" />
+                <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">Execution Logs</h2>
+              </div>
+              <div className="p-6">
+                {logsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-accent-blue animate-spin" />
+                  </div>
+                ) : logs.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-text-muted italic">No step logs recorded yet...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {logs.map((log: LogEntry) => (
+                      <div key={log.id} className="group border border-[rgba(255,255,255,0.05)] bg-background/30 rounded-xl overflow-hidden transition-all hover:border-[rgba(255,255,255,0.12)]">
+                        {/* Log Step Header */}
+                        <div className="px-4 py-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-7 h-7 rounded-full bg-accent-blue/10 text-accent-blue flex items-center justify-center text-xs font-bold">
+                              {log.step_number}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-text-primary">{log.action}</p>
+                              <p className="text-[10px] text-text-muted uppercase tracking-tighter">
+                                {log.status} {log.execution_time_ms ? `• ${(log.execution_time_ms / 1000).toFixed(1)}s` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => toggleSection(`output-${log.id}`)}
+                              className="p-1.5 hover:bg-white/5 rounded-md text-text-muted transition-colors"
+                              title="Toggle Details"
+                            >
+                              {expandedSections[`output-${log.id}`] ? (
+                                <ChevronDown className="w-4 h-4" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Collapsible Content */}
+                        {expandedSections[`output-${log.id}`] && (
+                          <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+                            <div className="grid grid-cols-1 gap-3">
+                              {log.input_data && (
+                                <div>
+                                  <p className="text-[10px] font-bold text-text-muted mb-1.5 uppercase">Input Parameters</p>
+                                  <div className="bg-black/40 rounded-lg p-3 border border-white/[0.03]">
+                                    <pre className="text-[11px] text-accent-blue font-mono overflow-x-auto whitespace-pre-wrap">
+                                      {JSON.stringify(log.input_data, null, 2)}
+                                    </pre>
+                                  </div>
+                                </div>
+                              )}
+                              {log.output_data && (
+                                <div>
+                                  <p className="text-[10px] font-bold text-text-muted mb-1.5 uppercase">Result Data</p>
+                                  <div className="bg-black/40 rounded-lg p-3 border border-white/[0.03]">
+                                    <pre className="text-[11px] text-text-muted font-mono overflow-x-auto whitespace-pre-wrap">
+                                      {JSON.stringify(log.output_data, null, 2)}
+                                    </pre>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar Info (1/3) */}
+          <div className="space-y-6">
+            {/* Metadata Card */}
+            <div className="bg-card rounded-2xl border border-[rgba(255,255,255,0.08)] p-6">
+              <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">Task Info</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] text-text-muted uppercase font-bold block mb-1">Session</label>
+                  <p className="text-sm text-text-primary font-mono bg-background/50 px-2 py-1 rounded border border-white/5 truncate">
+                    {task.id}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="text-[10px] text-text-muted uppercase font-bold block mb-1">Tools Invoked</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {task.tools_used && task.tools_used.length > 0 ? (
+                      task.tools_used.map((tool) => (
+                        <span
+                          key={tool}
+                          className="px-2 py-0.5 bg-accent-blue/10 text-accent-blue text-[10px] font-bold rounded border border-accent-blue/20"
+                        >
+                          {tool}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-text-muted italic">None yet</span>
                     )}
                   </div>
-                ))}
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-text-muted uppercase font-bold block mb-1">Last Sync</label>
+                  <p className="text-xs text-text-primary">
+                    {new Date().toLocaleTimeString()}
+                  </p>
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* Quick Actions Card */}
+            <div className="bg-gradient-to-br from-accent-blue/10 to-purple-500/10 rounded-2xl border border-white/5 p-6">
+              <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
+                <Rocket className="w-4 h-4" />
+                Quick Action
+              </h3>
+              <p className="text-xs text-text-muted mb-4 leading-relaxed">
+                If the agent gets stuck, you can try re-running the command from the dashboard with more context.
+              </p>
+              <button 
+                onClick={handleBack}
+                className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold text-text-primary transition-all border border-white/10"
+              >
+                Create Similar Task
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -3,90 +3,92 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
+from contextlib import asynccontextmanager
+
 from app.api.router import api_router
 from app.config import settings
 from app.models.database import engine, init_db
-from app.models.user import User  # Import to register with Base
-from app.models.task import Task, Conversation, AgentLog  # Import to register with Base
 from app.utils.validators import validate_environment
 from app.middleware.rate_limiter import limiter
 from app.services.scheduler import start_scheduler, stop_scheduler
+from app.services.http_client import http_client
+from app.utils.exceptions import (
+    AppException, app_exception_handler, 
+    global_exception_handler
+)
 import logging
 
-# Custom rate limit exceeded handler
+# Configure logging based on environment
+LOG_LEVEL = logging.INFO if settings.DEBUG else logging.WARNING
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} starting...")
+    validate_environment()
+    init_db()
+    await http_client.get_client() # Initialize global client
+    start_scheduler()
+    
+    yield
+    
+    # Shutdown
+    await http_client.close_client() # Close global client
+    stop_scheduler()
+    logger.info("👋 Application shut down complete")
+
+# Custom rate limit handler
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"detail": "Rate limit exceeded. Please try again later."},
+        content={"detail": "Rate limit exceeded. Please try again later.", "success": False},
     )
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Validate environment on startup
-validate_environment()
-
-# Create database tables
-init_db()
-logger.info(f"✅ {settings.APP_NAME} v{settings.APP_VERSION} starting...")
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    docs_url="/docs" if settings.DEBUG else None,  # Disable docs in production
-    redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
+    docs_url="/docs" if settings.DEBUG else None,
 )
+
+# Exception Handlers
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(Exception, global_exception_handler)
 
 # Rate limiter setup
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
-# CORS middleware - restrict origins in production
+# Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS if not settings.DEBUG else ["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-    max_age=600,  # Cache preflight requests for 10 minutes
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=600,
 )
 
-# Security: Trust only configured hosts
 if not settings.DEBUG:
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["*.railway.app", "*.vercel.app", "localhost", "127.0.0.1"],
     )
 
-# Include API routes
 app.include_router(api_router)
 
 @app.get("/")
 def root():
     return {
         "message": "AI Task Automation Agent API",
-        "version": settings.APP_VERSION,
-        "docs": "/docs" if settings.DEBUG else "Disabled in production",
         "status": "running"
     }
 
 @app.get("/health")
 def health_check():
-    return {
-        "status": "healthy",
-        "version": settings.APP_VERSION,
-        "debug": settings.DEBUG
-    }
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("🚀 Application startup complete")
-    # Start background scheduler
-    start_scheduler()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("👋 Application shutting down")
-    # Stop background scheduler
-    stop_scheduler()
+    return {"status": "healthy"}
