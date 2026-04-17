@@ -336,7 +336,7 @@ export default function TaskDetailPage() {
                   <label className="text-[10px] text-text-muted uppercase font-bold block mb-1">Tools Invoked</label>
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {task.tools_used && task.tools_used.length > 0 ? (
-                      task.tools_used.map((tool) => (
+                      task.tools_used.map((tool: string) => (
                         <span
                           key={tool}
                           className="px-2 py-0.5 bg-accent-blue/10 text-accent-blue text-[10px] font-bold rounded border border-accent-blue/20"

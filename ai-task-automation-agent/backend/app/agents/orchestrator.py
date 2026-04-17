@@ -44,9 +44,12 @@ class MultiAgentOrchestrator:
         user = self.db.query(User).filter(User.id == task.user_id).first()
         user_email = user.email if user else settings.EMAIL_ADDRESS
         user_name = user.full_name if user else "User"
-        # Since phone_number is not in User model yet, we can check if it's in session_id or use default
+        
+        # Priority: Database > Session (for WA) > Settings
         user_phone = settings.WHATSAPP_RECIPIENT_NUMBER
-        if session_id.startswith("wa_"):
+        if user and user.phone_number:
+            user_phone = user.phone_number
+        elif session_id.startswith("wa_"):
             user_phone = session_id.replace("wa_", "")
 
         # 1.5 Add user message to memory
@@ -81,7 +84,7 @@ class MultiAgentOrchestrator:
             current_agent_prompt = COMMUNICATOR_PROMPT
         
         messages = [
-            {"role": "system", "content": current_agent_prompt},
+            {"role": "system", "content": current_agent_prompt + user_info_context},
             *context_messages,
             {"role": "user", "content": task.user_input}
         ]
@@ -130,6 +133,18 @@ class MultiAgentOrchestrator:
                         args_str = args_str[1:]
                     
                     tool_args = json.loads(args_str)
+                    
+                    # Logic to ensure correct phone number for WhatsApp in recovery path
+                    if tool_name == "whatsapp":
+                        current_to = str(tool_args.get("to_number", ""))
+                        if not current_to or len(current_to) < 10 or "XXXX" in current_to:
+                            tool_args["to_number"] = user_phone
+                    
+                    if tool_name == "send_email":
+                        current_email = str(tool_args.get("to_email", ""))
+                        if not current_email or "@" not in current_email or "XXXX" in current_email:
+                            tool_args["to_email"] = user_email
+
                     result = await tool_registry.execute_tool(tool_name, **tool_args)
                     
                     # LOG TO DB (Crucial for UI)
@@ -174,7 +189,13 @@ class MultiAgentOrchestrator:
                     if tool_name == "whatsapp":
                         current_to = str(tool_args.get("to_number", ""))
                         if not current_to or len(current_to) < 10 or "XXXX" in current_to:
-                            tool_args["to_number"] = settings.WHATSAPP_RECIPIENT_NUMBER
+                            tool_args["to_number"] = user_phone
+                    
+                    # Logic to ensure correct email for sending emails
+                    if tool_name == "send_email":
+                        current_email = str(tool_args.get("to_email", ""))
+                        if not current_email or "@" not in current_email or "XXXX" in current_email:
+                            tool_args["to_email"] = user_email
                     
                     # Tool Execution
                     result = await tool_registry.execute_tool(tool_name, **tool_args)
