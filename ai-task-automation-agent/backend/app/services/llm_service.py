@@ -17,13 +17,18 @@ class LLMService:
         """
         Send chat completion request to Groq API
         """
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=temperature or settings.LLM_TEMPERATURE,
-            max_tokens=max_tokens or settings.LLM_MAX_TOKENS,
-            tools=tools if tools else None
-        )
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature or settings.LLM_TEMPERATURE,
+            "max_tokens": max_tokens or settings.LLM_MAX_TOKENS,
+        }
+        
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+
+        response = self.client.chat.completions.create(**kwargs)
         return response.choices[0].message
     
     def get_response(self, prompt: str, system_prompt: str = None) -> str:

@@ -13,10 +13,32 @@ class WebSearchTool(BaseTool):
     name = "web_search"
     description = "Search the internet for real-time information, news, or specific topics."
 
-    async def execute(self, query: str, max_results: int = 5, **kwargs) -> Dict[str, Any]:
+    def get_parameters_schema(self) -> Dict[str, Any]:
+        return {
+            "query": {
+                "type": "string",
+                "description": "The search query to look up on the web."
+            },
+            "max_results": {
+                "type": "integer",
+                "description": "Maximum number of search results to return (default 5).",
+                "default": 5
+            }
+        }
+
+    def get_required_parameters(self) -> list:
+        return ["query"]
+
+    async def execute(self, **kwargs) -> Dict[str, Any]:
         """
         Search with multiple fallbacks: Google -> Wikipedia -> DuckDuckGo Lite
         """
+        query = kwargs.get("query")
+        max_results = kwargs.get("max_results", 5)
+        
+        if not query:
+            return {"success": False, "message": "Search tool requires a 'query' parameter."}
+            
         results = []
         logger.info(f"🔍 Searching for: {query}")
         

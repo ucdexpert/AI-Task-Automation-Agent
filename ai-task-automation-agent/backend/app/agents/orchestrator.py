@@ -59,13 +59,27 @@ class MultiAgentOrchestrator:
                 tools=tool_registry.get_tools_schema()
             )
             
+            # PROTECT: If LLM hallucinates tags like <web_search> in content instead of using tools
+            content = llm_response.content or ""
+            if "<web_search" in content or "<web_scraper" in content or "<whatsapp" in content:
+                logger.warning("LLM Hallucinated tags. Forcing real tool call.")
+                messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": "IMPORTANT: Do not use text tags like <web_search>. You must use the actual function calling tools provided in the API."})
+                continue
+
             if hasattr(llm_response, 'tool_calls') and llm_response.tool_calls:
                 tool_error_occurred = False
                 for tool_call in llm_response.tool_calls[:2]:
                     # ... (rest of tool execution logic)
                     # Note: I'm keeping the logic here but ensuring it continues correctly
                     tool_name = tool_call.function.name
-                    tool_args = json.loads(tool_call.function.arguments)
+                    arguments_str = tool_call.function.arguments or "{}"
+                    try:
+                        tool_args = json.loads(arguments_str)
+                        if not isinstance(tool_args, dict):
+                            tool_args = {}
+                    except json.JSONDecodeError:
+                        tool_args = {}
                     
                     # Logic to ensure correct phone number for WhatsApp
                     if tool_name == "whatsapp":
@@ -92,15 +106,17 @@ class MultiAgentOrchestrator:
                     messages.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
                     messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(result)})
                     
-                    tools_used.append(tool_name)
-                    logs.append({"step": step_number, "tool": tool_name, "result": result})
-
-                    if not result.get("success", False):
-                        final_result = f"Task stopped due to error in {tool_name}: {result.get('message')}"
+                    if result.get("success", False):
+                        tools_used.append(tool_name)
+                        logs.append({"step": step_number, "tool": tool_name, "result": result})
+                    else:
+                        logger.warning(f"Tool {tool_name} failed: {result.get('message')}")
+                        # Don't break, let the LLM see the error and retry in the next step
                         tool_error_occurred = True
-                        break
                 
-                if tool_error_occurred: break
+                # If everything in this turn failed, we continue the while loop to give LLM another chance
+                if tool_error_occurred:
+                    continue
             else:
                 final_result = llm_response.content
                 break

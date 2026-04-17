@@ -24,6 +24,13 @@ import {
   Download,
   Search,
   UserCircle,
+  Sparkles,
+  Zap,
+  ArrowRight,
+  Activity,
+  Target,
+  TrendingUp,
+  Clock
 } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
@@ -65,7 +72,7 @@ export default function DashboardPage() {
   const executeMutation = useMutation({
     mutationFn: (text: string) => executeTask(text, sessionId),
     onSuccess: (result) => {
-      addToast('Task started successfully!', 'success');
+      addToast('Automation sequence initiated!', 'success');
       setTaskText('');
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       router.push(`/task/${result.id}`);
@@ -88,41 +95,14 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
-  const exportToCSV = () => {
-    if (filteredTasks.length === 0) {
-      addToast('No tasks to export', 'error');
-      return;
-    }
-
-    const headers = ['ID', 'Status', 'Task', 'Tools Used', 'Created At', 'Completed At'];
-    const rows = filteredTasks.map((task) => [
-      task.id,
-      task.status,
-      `"${task.user_input.replace(/"/g, '""')}"`,
-      `"${task.tools_used?.join(', ') || ''}"`,
-      new Date(task.created_at).toLocaleString(),
-      task.completed_at ? new Date(task.completed_at).toLocaleString() : 'N/A',
-    ]);
-
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `tasks_export_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    addToast(`Exported ${filteredTasks.length} tasks to CSV`, 'success');
-  };
-
   const handleRunAutomation = () => {
     if (!taskText.trim()) return;
     executeMutation.mutate(taskText);
   };
 
-  const handleQuickTask = (task: string) => {
-    setTaskText(task);
-    addToast(`Quick task loaded: "${task}"`, 'info');
+  const handleQuickAction = (prompt: string) => {
+    setTaskText(prompt);
+    addToast('Prompt loaded! Ready to run.', 'info');
   };
 
   const getFullName = () => {
@@ -132,11 +112,9 @@ export default function DashboardPage() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Filter and search tasks
   const filteredTasks = activities.filter((task: Task) => {
     const matchesSearch = searchQuery
       ? task.user_input.toLowerCase().includes(searchQuery.toLowerCase())
@@ -145,383 +123,268 @@ export default function DashboardPage() {
     return matchesSearch && matchesFilter;
   });
 
-  const quickTasks: Array<{ icons: string[]; text: string }> = [
-    { icons: ['globe', 'code'], text: 'Scrape & summarize tech news' },
-    { icons: ['doc'], text: 'Create a project report' },
-    { icons: ['robot', 'sparkle'], text: 'Market research on AI' },
-  ];
-
   return (
     <>
-      {/* Loading State */}
       {authLoading ? (
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-10 h-10 border-4 border-accent-blue border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-text-muted text-sm">Loading dashboard...</p>
-          </div>
+        <div className="min-h-screen bg-[#0A0C10] flex items-center justify-center">
+          <LoadingSpinner size="lg" />
         </div>
       ) : !isAuthenticated ? null : (
-        <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-40 h-14 bg-background border-b border-[rgba(255,255,255,0.08)] px-4 md:px-6 flex items-center justify-between">
-        {/* Left: Logo */}
-        <div className="flex items-center gap-3">
-          <div className="w-6 h-6 bg-gradient-to-br from-accent-blue to-accent-blueDark rounded flex items-center justify-center">
-            <Bot className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-base font-bold text-text-primary hidden sm:block">AI Task Automation</span>
-        </div>
-
-        {/* Right: Desktop */}
-        <div className="hidden md:flex items-center gap-4">
-          {/* User Name */}
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-            <span className="text-sm text-text-primary font-medium">{getFullName()}</span>
+        <div className="min-h-screen bg-[#0A0C10] text-slate-200 selection:bg-accent-blue/30 font-sans">
+          {/* Animated Background Blob */}
+          <div className="fixed inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-accent-blue/5 blur-[120px] rounded-full animate-pulse"></div>
+            <div className="absolute top-[20%] -right-[5%] w-[30%] h-[30%] bg-purple-600/5 blur-[100px] rounded-full animate-pulse delay-700"></div>
           </div>
 
-          {/* Profile */}
-          <Link
-            href="/profile"
-            className="flex items-center gap-2 px-3 h-9 border border-[rgba(255,255,255,0.08)] text-text-primary text-sm rounded-md hover:border-accent-blue transition-all"
-          >
-            <UserCircle className="w-4 h-4" />
-            Profile
-          </Link>
-
-          {/* Logout */}
-          <button
-            onClick={handleLogout}
-            className="text-sm text-accent-red hover:underline transition-all"
-          >
-            Logout
-          </button>
-
-          {/* Analytics */}
-          <Link
-            href="/analytics"
-            className="flex items-center gap-2 px-3 h-9 border border-text-primary text-text-primary text-sm rounded-md hover:bg-text-primary hover:text-background transition-all"
-          >
-            <BarChart3 className="w-4 h-4" />
-            Analytics
-          </Link>
-        </div>
-
-        {/* Mobile Menu Toggle */}
-        <button
-          className="md:hidden p-2 text-text-primary hover:bg-card rounded"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Toggle menu"
-        >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
-      </nav>
-
-      {/* Mobile Menu Dropdown */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-card border-b border-[rgba(255,255,255,0.08)] px-4 py-4 animate-slide-down">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-3 border-b border-[rgba(255,255,255,0.08)]">
-              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-              <span className="text-sm text-text-primary font-medium">{getFullName()}</span>
+          {/* Navbar */}
+          <nav className="sticky top-0 z-50 backdrop-blur-xl bg-[#0A0C10]/70 border-b border-white/5 px-6 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-3 group cursor-pointer">
+              <div className="w-8 h-8 bg-gradient-to-tr from-accent-blue to-purple-500 rounded-lg flex items-center justify-center shadow-lg shadow-accent-blue/20 group-hover:scale-110 transition-transform">
+                <Bot className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-lg font-black tracking-tight text-white uppercase italic">Agent<span className="text-accent-blue">X</span></span>
             </div>
-            <Link
-              href="/profile"
-              className="flex items-center gap-2 px-3 py-2 border border-[rgba(255,255,255,0.08)] text-text-primary text-sm rounded-md hover:border-accent-blue transition-all"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <UserCircle className="w-4 h-4" />
-              Profile
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-accent-red hover:underline text-left py-2"
-            >
-              Logout
+
+            <div className="hidden md:flex items-center gap-6">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/5">
+                <div className="w-2 h-2 rounded-full bg-accent-green animate-pulse"></div>
+                <span className="text-xs font-bold text-slate-300">{getFullName()}</span>
+              </div>
+              <Link href="/analytics" className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" /> Analytics
+              </Link>
+              <Link href="/profile" className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2">
+                <UserCircle className="w-4 h-4" /> Profile
+              </Link>
+              <button onClick={handleLogout} className="text-sm font-bold text-accent-red/80 hover:text-accent-red transition-colors">
+                Logout
+              </button>
+            </div>
+            
+            <button className="md:hidden p-2 text-slate-300" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+              {mobileMenuOpen ? <X /> : <Menu />}
             </button>
-            <Link
-              href="/analytics"
-              className="flex items-center gap-2 px-3 py-2 border border-text-primary text-text-primary text-sm rounded-md hover:bg-text-primary hover:text-background transition-all"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <BarChart3 className="w-4 h-4" />
-              Analytics
-            </Link>
-          </div>
-        </div>
-      )}
+          </nav>
 
-      {/* Main Content */}
-      <div className="px-4 md:px-6 py-6">
-        {/* Analytics Overview Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="bg-card border border-[rgba(255,255,255,0.08)] rounded-xl p-4">
-            <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Total Tasks</p>
-            <h3 className="text-2xl font-bold text-text-primary">{activities.length}</h3>
-          </div>
-          <div className="bg-card border border-[rgba(255,255,255,0.08)] rounded-xl p-4">
-            <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Success Rate</p>
-            <h3 className="text-2xl font-bold text-accent-green">
-              {activities.length > 0 
-                ? Math.round((activities.filter(t => t.status === 'completed').length / activities.length) * 100) 
-                : 0}%
-            </h3>
-          </div>
-          <div className="bg-card border border-[rgba(255,255,255,0.08)] rounded-xl p-4">
-            <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Active Now</p>
-            <h3 className="text-2xl font-bold text-yellow-500">
-              {activities.filter(t => t.status === 'processing').length}
-            </h3>
-          </div>
-        </div>
+          {/* Mobile Menu Dropdown */}
+          {mobileMenuOpen && (
+            <div className="md:hidden fixed inset-0 z-40 bg-[#0A0C10]/95 backdrop-blur-2xl animate-in fade-in duration-300">
+               <div className="flex flex-col items-center justify-center h-full gap-8">
+                  <Link href="/analytics" onClick={() => setMobileMenuOpen(false)} className="text-2xl font-black text-white flex items-center gap-3">
+                    <BarChart3 className="w-6 h-6 text-accent-blue" /> Analytics
+                  </Link>
+                  <Link href="/profile" onClick={() => setMobileMenuOpen(false)} className="text-2xl font-black text-white flex items-center gap-3">
+                    <UserCircle className="w-6 h-6 text-accent-blue" /> Profile
+                  </Link>
+                  <button onClick={handleLogout} className="text-2xl font-black text-accent-red flex items-center gap-3">
+                    <LogOut className="w-6 h-6" /> Logout
+                  </button>
+                  <button onClick={() => setMobileMenuOpen(false)} className="mt-10 w-14 h-14 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
+                    <X className="w-6 h-6 text-white" />
+                  </button>
+               </div>
+            </div>
+          )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
-          {/* Left Column */}
-          <div className="space-y-6">
-            {/* Task Input Card */}
-            <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5">
-              <div className="relative">
-                <textarea
-                  value={taskText}
-                  onChange={(e) => setTaskText(e.target.value)}
-                  placeholder="Describe your task here... (e.g. Scrape AI news and summarize)"
-                  className="w-full min-h-[120px] p-4 bg-background border-0 rounded-lg text-text-primary placeholder-text-muted text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-accent-blue"
-                  style={{ fontFamily: 'inherit' }}
-                />
-                <div className="absolute bottom-3 right-3 text-xs text-text-muted">
-                  {taskText.length} characters
+          {/* Main Content */}
+          <main className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+            
+            {/* Stats Header */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+              {[
+                { label: 'Total Executions', value: activities.length, icon: Activity, color: 'text-accent-blue' },
+                { label: 'Success Rate', value: `${activities.length > 0 ? Math.round((activities.filter(t => t.status === 'completed').length / activities.length) * 100) : 0}%`, icon: Target, color: 'text-accent-green' },
+                { label: 'Active Pipeline', value: activities.filter(t => t.status === 'processing').length, icon: Zap, color: 'text-yellow-500' },
+                { label: 'System Status', value: 'Healthy', icon: CheckCircle, color: 'text-accent-blue' },
+              ].map((stat, i) => (
+                <div key={i} className="bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-2xl p-4 transition-all hover:bg-white/[0.05]">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</p>
+                    <stat.icon className={`w-4 h-4 ${stat.color}`} />
+                  </div>
+                  <p className="text-2xl font-bold text-white">{stat.value}</p>
                 </div>
-              </div>
-
-              {/* Bottom Bar */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-accent-green animate-pulse-dot"></div>
-                  <span className="text-xs text-text-muted">AI Engine Ready</span>
-                </div>
-
-                <button
-                  onClick={handleRunAutomation}
-                  disabled={!taskText.trim() || executeMutation.isPending}
-                  className={`h-11 px-5 rounded-lg font-medium flex items-center gap-2 transition-all duration-200 ${
-                    taskText.trim() && !executeMutation.isPending
-                      ? 'bg-gradient-to-r from-accent-blue to-accent-blueDark text-white hover:opacity-90'
-                      : 'bg-[#374151] text-text-muted cursor-not-allowed'
-                  }`}
-                >
-                  {executeMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Running...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Rocket className="w-5 h-5" />
-                      <span>Run Automation</span>
-                    </>
-                  )}
-                </button>
-              </div>
+              ))}
             </div>
 
-            {/* Recent Activity */}
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-text-primary">Recent Activity</h2>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-text-muted">{filteredTasks.length} tasks</span>
-                  {filteredTasks.length > 0 && (
-                    <button
-                      onClick={exportToCSV}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-card border border-[rgba(255,255,255,0.08)] rounded-lg text-sm text-text-muted hover:text-text-primary hover:border-accent-blue transition-all"
-                      title="Export to CSV"
-                    >
-                      <Download className="w-4 h-4" />
-                      Export
-                    </button>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left: Input & History (8 Cols) */}
+              <div className="lg:col-span-8 space-y-8">
+                
+                {/* Command Center */}
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-accent-blue to-purple-600 rounded-3xl blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
+                  <div className="relative bg-[#11141B] border border-white/10 rounded-3xl p-6 shadow-2xl">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Sparkles className="w-5 h-5 text-accent-blue" />
+                      <h2 className="text-sm font-bold text-white uppercase tracking-tighter">Command Center</h2>
+                    </div>
+                    
+                    <textarea
+                      value={taskText}
+                      onChange={(e) => setTaskText(e.target.value)}
+                      placeholder="What should the agent do next? (e.g., 'Research latest AI trends and WhatsApp me')"
+                      className="w-full min-h-[140px] bg-transparent border-0 text-white placeholder-slate-600 text-lg resize-none focus:ring-0"
+                    />
+
+                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                      <div className="flex items-center gap-4">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                          {taskText.length} characters
+                        </span>
+                      </div>
+                      
+                      <button
+                        onClick={handleRunAutomation}
+                        disabled={!taskText.trim() || executeMutation.isPending}
+                        className="group flex items-center gap-2 bg-accent-blue hover:bg-accent-blueDark disabled:bg-slate-800 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-xl shadow-accent-blue/20"
+                      >
+                        {executeMutation.isPending ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <>Execute <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* History Section */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      Recent Activity <span className="text-xs bg-white/5 px-2 py-0.5 rounded text-slate-500">{filteredTasks.length}</span>
+                    </h2>
+                    
+                    <div className="flex gap-2">
+                      {['all', 'completed', 'failed'].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setFilterStatus(s as any)}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                            filterStatus === s ? 'bg-white/10 text-white border border-white/10' : 'text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {tasksLoading ? (
+                    <div className="grid grid-cols-1 gap-4">
+                       {[1,2,3].map(i => <div key={i} className="h-32 bg-white/[0.02] rounded-2xl animate-pulse border border-white/5"></div>)}
+                    </div>
+                  ) : filteredTasks.length === 0 ? (
+                    <div className="bg-white/[0.01] border-2 border-dashed border-white/5 rounded-[40px] p-20 text-center">
+                        <Rocket className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                        <p className="text-slate-500 font-medium">No commands in history. System ready for input.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4">
+                      {filteredTasks.map((task: Task) => (
+                        <Link 
+                          href={`/task/${task.id}`} 
+                          key={task.id}
+                          className="group relative bg-[#11141B] border border-white/5 rounded-2xl p-5 hover:border-white/10 hover:bg-[#161A23] transition-all overflow-hidden"
+                        >
+                          {task.status === 'processing' && (
+                            <div className="absolute top-0 left-0 right-0 h-[2px] bg-accent-blue/20 overflow-hidden">
+                              <div className="h-full bg-accent-blue animate-progress-indefinite"></div>
+                            </div>
+                          )}
+                          
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-3 flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-1.5 h-1.5 rounded-full ${
+                                  task.status === 'completed' ? 'bg-accent-green' : task.status === 'failed' ? 'bg-accent-red' : 'bg-yellow-500 animate-pulse'
+                                }`}></div>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{task.status}</span>
+                                <span className="text-[10px] font-mono text-slate-600">ID-{task.id}</span>
+                              </div>
+                              <p className="text-sm font-bold text-slate-200 line-clamp-1 group-hover:text-white transition-colors">{task.user_input}</p>
+                              
+                              <div className="flex items-center gap-2">
+                                {task.tools_used?.map(t => (
+                                  <span key={t} className="px-2 py-0.5 bg-white/5 text-[9px] font-black text-slate-400 rounded uppercase border border-white/5">{t}</span>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div className="text-right">
+                              <p className="text-[10px] font-bold text-slate-600">{formatDate(task.created_at)}</p>
+                              <ArrowRight className="w-4 h-4 text-slate-700 mt-4 ml-auto group-hover:text-accent-blue transition-colors" />
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Search & Filter */}
-              {activities.length > 0 && (
-                <div className="mb-4 space-y-3">
-                  {/* Search Bar */}
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search tasks..."
-                    className="w-full px-4 py-2.5 bg-background border border-[rgba(255,255,255,0.08)] rounded-lg text-text-primary placeholder-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-accent-blue"
-                  />
-
-                  {/* Filter Buttons */}
-                  <div className="flex gap-2">
-                    {(['all', 'completed', 'failed'] as const).map((status) => (
+              {/* Right: Tools & Tips (4 Cols) */}
+              <div className="lg:col-span-4 space-y-6">
+                
+                {/* Interactive Toolbelt */}
+                <div className="bg-[#11141B] border border-white/5 rounded-3xl p-6">
+                  <h3 className="text-xs font-black text-white uppercase tracking-widest mb-6">Smart Toolbelt</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { name: 'WhatsApp', icon: Mail, color: 'text-accent-green', prompt: 'Send a WhatsApp to 923170219387: ' },
+                      { name: 'Web Search', icon: Globe, color: 'text-accent-blue', prompt: 'Research about ' },
+                      { name: 'Calendar', icon: Calendar, color: 'text-purple-500', prompt: 'Schedule a meeting for tomorrow at 10 AM: ' },
+                      { name: 'Data Scrape', icon: FolderOpen, color: 'text-yellow-500', prompt: 'Scrape this URL and summarize: ' },
+                    ].map((tool) => (
                       <button
-                        key={status}
-                        onClick={() => setFilterStatus(status)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                          filterStatus === status
-                            ? 'bg-accent-blue text-white'
-                            : 'bg-card border border-[rgba(255,255,255,0.08)] text-text-muted hover:text-text-primary'
-                        }`}
+                        key={tool.name}
+                        onClick={() => handleQuickAction(tool.prompt)}
+                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/20 hover:bg-white/[0.08] transition-all group"
                       >
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                        <tool.icon className={`w-6 h-6 ${tool.color} group-hover:scale-110 transition-transform`} />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{tool.name}</span>
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {tasksLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <LoadingSpinner size="md" />
+                {/* Quick Prompts */}
+                <div className="bg-gradient-to-br from-accent-blue/10 to-purple-600/10 border border-white/5 rounded-3xl p-6">
+                   <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4">Quick Templates</h3>
+                   <div className="space-y-2">
+                     {[
+                       "Research latest cricket news and WhatsApp me",
+                       "Check my calendar for today",
+                       "Scrape tech news and email a summary",
+                     ].map((p, i) => (
+                       <button
+                        key={i}
+                        onClick={() => handleQuickAction(p)}
+                        className="w-full text-left p-3 rounded-xl bg-black/20 hover:bg-black/40 text-[11px] font-medium text-slate-400 border border-white/5 transition-all"
+                       >
+                         {p}
+                       </button>
+                     ))}
+                   </div>
                 </div>
-              ) : filteredTasks.length === 0 ? (
-                <div className="border-2 border-dashed border-[rgba(255,255,255,0.15)] rounded-xl p-8 text-center">
-                  <p className="text-text-muted text-sm">
-                    No automations yet — run your first task above
+
+                {/* System Tip */}
+                <div className="p-6 bg-white/[0.02] rounded-3xl border border-white/5">
+                  <div className="flex items-center gap-2 mb-2 text-accent-blue">
+                    <Sparkles className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Pro Tip</span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed italic">
+                    "You can ask the agent to chain tools, like 'Search for X, then WhatsApp the summary to me'."
                   </p>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredTasks.map((task: Task) => (
-                    <div
-                      key={task.id}
-                      className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-4"
-                    >
-                      {/* Top Row */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {task.status === 'completed' ? (
-                            <>
-                              <CheckCircle className="w-4 h-4 text-accent-green" />
-                              <span className="text-sm text-accent-green font-medium">Completed</span>
-                            </>
-                          ) : task.status === 'failed' ? (
-                            <>
-                              <XCircle className="w-4 h-4 text-accent-red" />
-                              <span className="text-sm text-accent-red font-medium">Failed</span>
-                            </>
-                          ) : (
-                            <>
-                              <Loader2 className="w-4 h-4 text-yellow-500 animate-spin" />
-                              <span className="text-sm text-yellow-500 font-medium">Processing</span>
-                            </>
-                          )}
-                        </div>
-                        <span className="text-xs text-text-muted">{formatDate(task.created_at)}</span>
-                      </div>
 
-                      {/* Task Description */}
-                      <p className="text-sm font-semibold text-text-primary mt-2 line-clamp-2">
-                        {task.user_input}
-                      </p>
-
-                      {/* Result Preview */}
-                      {task.result && (
-                        <p className="text-xs text-text-muted mt-1 line-clamp-1 overflow-hidden text-ellipsis">
-                          {task.result}
-                        </p>
-                      )}
-
-                      {/* Bottom Row */}
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex gap-2">
-                          {task.tools_used?.slice(0, 2).map((tool, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-block px-3 py-0.5 bg-[#1E3A5F] text-[#60A5FA] text-[11px] rounded-full"
-                            >
-                              {tool}
-                            </span>
-                          ))}
-                        </div>
-                        <Link
-                          href={`/task/${task.id}`}
-                          className="text-sm text-accent-blue hover:underline"
-                        >
-                          View Details →
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div className="space-y-4">
-            {/* Quick Tasks Card */}
-            <div className="bg-gradient-to-br from-[#1D4ED8] to-accent-blue rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Rocket className="w-5 h-5 text-white" />
-                <h3 className="text-lg font-bold text-white">Quick Tasks</h3>
-              </div>
-
-              <div className="space-y-3">
-                {quickTasks.map((task, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleQuickTask(task.text)}
-                    className="w-full px-4 py-3 bg-white/12 hover:bg-white/20 rounded-lg transition-all flex items-center gap-2.5 text-sm text-white text-left"
-                  >
-                    {task.icons.includes('globe') && <Globe className="w-4 h-4" />}
-                    {task.icons.includes('code') && <Rocket className="w-4 h-4" />}
-                    {task.icons.includes('doc') && <FolderOpen className="w-4 h-4" />}
-                    {task.icons.includes('robot') && <Bot className="w-4 h-4" />}
-                    {task.text}
-                  </button>
-                ))}
               </div>
             </div>
-
-            {/* Toolbelt Card */}
-            <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5">
-              <h3 className="text-base font-bold text-text-primary mb-4 flex items-center gap-2">
-                🔧 Toolbelt
-              </h3>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button className="bg-background rounded-lg border border-[rgba(255,255,255,0.08)] p-4 flex flex-col items-center gap-2 hover:border-accent-blue transition-all cursor-pointer">
-                  <Mail className="w-5 h-5 text-accent-blue" />
-                  <span className="text-xs text-text-muted">Email</span>
-                </button>
-
-                <button className="bg-background rounded-lg border border-[rgba(255,255,255,0.08)] p-4 flex flex-col items-center gap-2 hover:border-accent-blue transition-all cursor-pointer">
-                  <Globe className="w-5 h-5 text-purple-500" />
-                  <span className="text-xs text-text-muted">Web</span>
-                </button>
-
-                <button className="bg-background rounded-lg border border-[rgba(255,255,255,0.08)] p-4 flex flex-col items-center gap-2 hover:border-accent-blue transition-all cursor-pointer">
-                  <FolderOpen className="w-5 h-5 text-yellow-500" />
-                  <span className="text-xs text-text-muted">Files</span>
-                </button>
-
-                <button className="bg-background rounded-lg border border-[rgba(255,255,255,0.08)] p-4 flex flex-col items-center gap-2 hover:border-accent-blue transition-all cursor-pointer">
-                  <Calendar className="w-5 h-5 text-accent-green" />
-                  <span className="text-xs text-text-muted">Calendar</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Power User Tip Card */}
-            <div className="bg-card rounded-xl border border-[rgba(255,255,255,0.08)] p-5 relative">
-              <div className="absolute top-2 right-3 text-5xl font-bold text-[rgba(255,255,255,0.06)] select-none">
-                PRO
-              </div>
-              <h3 className="text-sm font-bold text-text-primary mb-2">Power User Tip</h3>
-              <p className="text-xs text-text-muted leading-relaxed">
-                You can ask the agent to chain multiple steps together, like "Scrape X, summarize it, and save to Y.txt".
-              </p>
-            </div>
-          </div>
+          </main>
         </div>
-      </div>
-    </div>
       )}
     </>
   );
