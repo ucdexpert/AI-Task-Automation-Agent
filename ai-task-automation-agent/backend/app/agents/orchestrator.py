@@ -6,9 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.services.llm_service import llm_service
 from app.tools.registry import tool_registry
-from app.agents.prompts import SYSTEM_PROMPT
+from app.agents.prompts import (
+    SYSTEM_PROMPT, 
+    ROUTER_PROMPT, 
+    RESEARCHER_PROMPT, 
+    EXECUTOR_PROMPT, 
+    COMMUNICATOR_PROMPT
+)
 from app.agents.memory import AgentMemory
 from app.models.task import Task, AgentLog
+from app.models.user import User
 from app.services.websocket_service import manager
 from app.config import settings
 import logging
@@ -33,15 +40,48 @@ class MultiAgentOrchestrator:
         tools_used = []
         logs = []
         
-        # 1. Add user message to memory
+        # 1. Fetch User details for dynamic notification
+        user = self.db.query(User).filter(User.id == task.user_id).first()
+        user_email = user.email if user else settings.EMAIL_ADDRESS
+        user_name = user.full_name if user else "User"
+        # Since phone_number is not in User model yet, we can check if it's in session_id or use default
+        user_phone = settings.WHATSAPP_RECIPIENT_NUMBER
+        if session_id.startswith("wa_"):
+            user_phone = session_id.replace("wa_", "")
+
+        # 1.5 Add user message to memory
         self.memory.add_message(session_id=session_id, role="user", message=task.user_input)
         context_messages = self.memory.get_context_messages(session_id)
         
-        # 2. Build Agent System Prompt based on context
-        is_whatsapp = session_id.startswith("wa_")
+        # 2. ROUTING PHASE: Decide which expert to use
+        # Inject user info into system context
+        user_info_context = f"\n\nCURRENT USER INFO:\n- Name: {user_name}\n- Email: {user_email}\n- WhatsApp: {user_phone}\nAlways use these details for notifications unless the user specifies otherwise."
+        
+        routing_messages = [
+            {"role": "system", "content": ROUTER_PROMPT + user_info_context},
+            {"role": "user", "content": f"Task: {task.user_input}\nContext: {json.dumps(context_messages)}"}
+        ]
+        
+        route_response = llm_service.chat_completion(messages=routing_messages)
+        route_content = route_response.content.upper()
+        
+        current_agent_prompt = SYSTEM_PROMPT # Default
+        available_tools = tool_registry.get_tools_schema() # Default all
+        
+        if "RESEARCHER" in route_content:
+            logger.info("Routing to RESEARCHER expert")
+            current_agent_prompt = RESEARCHER_PROMPT
+            # Optional: Filter tools for Researcher only
+            # researcher_tools = ["web_search", "web_scraper"]
+        elif "EXECUTOR" in route_content:
+            logger.info("Routing to EXECUTOR expert")
+            current_agent_prompt = EXECUTOR_PROMPT
+        elif "COMMUNICATOR" in route_content:
+            logger.info("Routing to COMMUNICATOR expert")
+            current_agent_prompt = COMMUNICATOR_PROMPT
         
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": current_agent_prompt},
             *context_messages,
             {"role": "user", "content": task.user_input}
         ]

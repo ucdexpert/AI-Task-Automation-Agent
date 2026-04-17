@@ -222,8 +222,8 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
               {[
                 { label: 'Total Executions', value: activities.length, icon: Activity, color: 'text-accent-blue' },
-                { label: 'Success Rate', value: `${activities.length > 0 ? Math.round((activities.filter(t => t.status === 'completed').length / activities.length) * 100) : 0}%`, icon: Target, color: 'text-accent-green' },
-                { label: 'Active Pipeline', value: activities.filter(t => t.status === 'processing').length, icon: Zap, color: 'text-yellow-500' },
+                { label: 'Success Rate', value: `${activities.length > 0 ? Math.round((activities.filter((t: Task) => t.status === 'completed').length / activities.length) * 100) : 0}%`, icon: Target, color: 'text-accent-green' },
+                { label: 'Active Pipeline', value: activities.filter((t: Task) => t.status === 'processing').length, icon: Zap, color: 'text-yellow-500' },
                 { label: 'System Status', value: 'Healthy', icon: CheckCircle, color: 'text-accent-blue' },
               ].map((stat, i) => (
                 <div key={i} className="bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-2xl p-4 transition-all hover:bg-white/[0.05]">
