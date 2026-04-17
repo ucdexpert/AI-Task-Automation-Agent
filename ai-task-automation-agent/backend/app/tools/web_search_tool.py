@@ -20,9 +20,9 @@ class WebSearchTool(BaseTool):
                 "description": "The search query to look up on the web."
             },
             "max_results": {
-                "type": "integer",
-                "description": "Maximum number of search results to return (default 5).",
-                "default": 5
+                "type": "string",
+                "description": "Maximum number of search results to return (e.g. '5').",
+                "default": "5"
             }
         }
 
@@ -34,7 +34,12 @@ class WebSearchTool(BaseTool):
         Search with multiple fallbacks: Google -> Wikipedia -> DuckDuckGo Lite
         """
         query = kwargs.get("query")
-        max_results = kwargs.get("max_results", 5)
+        
+        # Safely handle max_results as string or int
+        try:
+            max_results = int(kwargs.get("max_results", 5))
+        except (ValueError, TypeError):
+            max_results = 5
         
         if not query:
             return {"success": False, "message": "Search tool requires a 'query' parameter."}

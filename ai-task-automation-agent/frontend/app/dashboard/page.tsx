@@ -55,6 +55,34 @@ export default function DashboardPage() {
   const [sessionId] = useState(() => `session_${Date.now()}`);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'failed'>('all');
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setIsUploading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/profile/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      const data = await response.json();
+      if (data.success) {
+        addToast(`File ${file.name} uploaded!`, 'success');
+        setTaskText(`Analyze the uploaded file "${file.name}" and provide a summary.`);
+      }
+    } catch (error) {
+      addToast('Upload failed', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // TanStack Query for fetching tasks
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
@@ -331,20 +359,33 @@ export default function DashboardPage() {
                 {/* Interactive Toolbelt */}
                 <div className="bg-[#11141B] border border-white/5 rounded-3xl p-6">
                   <h3 className="text-xs font-black text-white uppercase tracking-widest mb-6">Smart Toolbelt</h3>
+                  <input 
+                    type="file" 
+                    id="file-upload" 
+                    className="hidden" 
+                    onChange={handleFileUpload}
+                    accept=".pdf,.xlsx,.xls,.csv,.txt,.json"
+                  />
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { name: 'WhatsApp', icon: Mail, color: 'text-accent-green', prompt: 'Send a WhatsApp to 923170219387: ' },
-                      { name: 'Web Search', icon: Globe, color: 'text-accent-blue', prompt: 'Research about ' },
-                      { name: 'Calendar', icon: Calendar, color: 'text-purple-500', prompt: 'Schedule a meeting for tomorrow at 10 AM: ' },
-                      { name: 'Data Scrape', icon: FolderOpen, color: 'text-yellow-500', prompt: 'Scrape this URL and summarize: ' },
+                      { name: 'WhatsApp', icon: Mail, color: 'text-accent-green', prompt: 'Send a WhatsApp to 923170219387: ', type: 'action' },
+                      { name: 'Web Search', icon: Globe, color: 'text-accent-blue', prompt: 'Research about ', type: 'action' },
+                      { name: 'Calendar', icon: Calendar, color: 'text-purple-500', prompt: 'Schedule a meeting for tomorrow at 10 AM: ', type: 'action' },
+                      { name: 'Analyze File', icon: FolderOpen, color: 'text-yellow-500', prompt: '', type: 'upload' },
                     ].map((tool) => (
                       <button
                         key={tool.name}
-                        onClick={() => handleQuickAction(tool.prompt)}
+                        onClick={() => tool.type === 'upload' ? document.getElementById('file-upload')?.click() : handleQuickAction(tool.prompt)}
                         className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/20 hover:bg-white/[0.08] transition-all group"
                       >
-                        <tool.icon className={`w-6 h-6 ${tool.color} group-hover:scale-110 transition-transform`} />
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{tool.name}</span>
+                        {isUploading && tool.type === 'upload' ? (
+                          <Loader2 className="w-6 h-6 text-yellow-500 animate-spin" />
+                        ) : (
+                          <tool.icon className={`w-6 h-6 ${tool.color} group-hover:scale-110 transition-transform`} />
+                        )}
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                          {isUploading && tool.type === 'upload' ? 'Uploading...' : tool.name}
+                        </span>
                       </button>
                     ))}
                   </div>

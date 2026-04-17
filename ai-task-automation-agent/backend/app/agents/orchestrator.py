@@ -1,5 +1,6 @@
 import json
 import time
+import re
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 
@@ -54,19 +55,67 @@ class MultiAgentOrchestrator:
             step_number += 1
             step_start = time.time()
             
-            llm_response = llm_service.chat_completion(
-                messages=messages,
-                tools=tool_registry.get_tools_schema()
-            )
+            try:
+                llm_response = llm_service.chat_completion(
+                    messages=messages,
+                    tools=tool_registry.get_tools_schema()
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if "400" in error_msg or "tool_use_failed" in error_msg:
+                    logger.warning(f"LLM tool call failed with 400 error. Attempting to fix via prompt correction. Error: {error_msg}")
+                    # Extract tool name and args if possible from error message to manually fix
+                    # Or just tell the model it messed up the format
+                    messages.append({"role": "user", "content": f"ERROR: You used the wrong format for a tool call. NEVER use <function=...> or string-based tool calls. Please use the official tool-calling schema only. Retrying step {step_number}..."})
+                    continue
+                else:
+                    logger.error(f"LLM call failed: {error_msg}")
+                    break
             
-            # PROTECT: If LLM hallucinates tags like <web_search> in content instead of using tools
+            # PROTECT & RECOVER: Catch text-based tool calls (hallucinations)
             content = llm_response.content or ""
-            if "<web_search" in content or "<web_scraper" in content or "<whatsapp" in content:
-                logger.warning("LLM Hallucinated tags. Forcing real tool call.")
-                messages.append({"role": "assistant", "content": content})
-                messages.append({"role": "user", "content": "IMPORTANT: Do not use text tags like <web_search>. You must use the actual function calling tools provided in the API."})
-                continue
-
+            # Improved regex to catch more variations of hallucinations
+            text_tool_match = re.search(r'\{(\w+)\s*(\{.*?\})\}', content) or \
+                             re.search(r'<function=(\w+)>(.*?)</function>', content) or \
+                             re.search(r'<function=(\w+)=(.*?)></function>', content)
+            
+            if text_tool_match and not (hasattr(llm_response, 'tool_calls') and llm_response.tool_calls):
+                tool_name = text_tool_match.group(1)
+                args_str = text_tool_match.group(2)
+                logger.warning(f"Detected text-based tool call: {tool_name}. Executing via recovery logic.")
+                
+                try:
+                    # Clean up args_str if it contains the equals sign or is missing one
+                    if args_str.startswith('='):
+                        args_str = args_str[1:]
+                    
+                    tool_args = json.loads(args_str)
+                    result = await tool_registry.execute_tool(tool_name, **tool_args)
+                    
+                    # LOG TO DB (Crucial for UI)
+                    log_entry = AgentLog(
+                        task_id=task.id,
+                        step_number=step_number,
+                        action=tool_name,
+                        input_data=tool_args,
+                        output_data=result,
+                        status="success" if result.get("success", False) else "failed"
+                    )
+                    self.db.add(log_entry)
+                    self.db.commit()
+                    
+                    # Feed it back as if it was a real tool call to keep the loop going
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": f"Tool {tool_name} executed successfully. Result: {json.dumps(result)}. Continue to the next step or provide a final summary in Hinglish."})
+                    tools_used.append(tool_name)
+                    logs.append({"step": step_number, "tool": tool_name, "result": result})
+                    continue
+                except Exception as parse_error:
+                    logger.error(f"Failed to parse text-based tool args: {parse_error}")
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": f"Error: I couldn't parse your tool call for {tool_name}. Please use the ACTUAL tool calling feature, don't just write it as text."})
+                    continue
+            
             if hasattr(llm_response, 'tool_calls') and llm_response.tool_calls:
                 tool_error_occurred = False
                 for tool_call in llm_response.tool_calls[:2]:

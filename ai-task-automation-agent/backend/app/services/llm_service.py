@@ -26,7 +26,6 @@ class LLMService:
         
         if tools:
             kwargs["tools"] = tools
-            kwargs["tool_choice"] = "auto"
 
         response = self.client.chat.completions.create(**kwargs)
         return response.choices[0].message

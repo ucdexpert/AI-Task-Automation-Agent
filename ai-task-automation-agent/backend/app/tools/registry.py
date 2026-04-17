@@ -5,6 +5,7 @@ from app.tools.web_scraper_tool import WebScraperTool
 from app.tools.web_search_tool import WebSearchTool
 from app.tools.file_tool import FileTool
 from app.tools.google_calendar_tool import GoogleCalendarTool
+from app.tools.google_drive_tool import GoogleDriveTool
 from app.tools.whatsapp_tool import WhatsAppTool
 from app.tools.calendar_notification_tool import CalendarNotificationTool
 from app.tools.robot_tool import RobotTool
@@ -25,6 +26,7 @@ class ToolRegistry:
             WebSearchTool(),
             FileTool(),
             GoogleCalendarTool(),
+            GoogleDriveTool(),
             WhatsAppTool(),
             CalendarNotificationTool(),
             RobotTool()

@@ -14,8 +14,34 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
+...
+import os
+import shutil
+
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
+@router.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload a document for analysis"""
+    try:
+        docs_dir = os.path.abspath("documents")
+        if not os.path.exists(docs_dir):
+            os.makedirs(docs_dir)
+            
+        file_path = os.path.join(docs_dir, file.filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        logger.info(f"File uploaded: {file.filename} by user {current_user.id}")
+        return {"success": True, "filename": file.filename, "message": "File ready for analysis"}
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/me", response_model=ProfileResponse)
 def get_profile(current_user: User = Depends(get_current_user)):
