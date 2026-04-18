@@ -1,5 +1,5 @@
-# Use a Python base image
-FROM python:3.10-slim-buster
+# Use a newer Python base image (Debian Bookworm)
+FROM python:3.10-slim-bookworm
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
