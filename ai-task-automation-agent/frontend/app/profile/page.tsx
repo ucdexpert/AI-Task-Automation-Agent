@@ -42,6 +42,7 @@ export default function ProfilePage() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(''); // Added phoneNumber state
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -65,6 +66,7 @@ export default function ProfilePage() {
       setProfile(response.data);
       setFullName(response.data.full_name || '');
       setEmail(response.data.email);
+      setPhoneNumber(response.data.phone_number || ''); // Set phone number on load
     } catch (error) {
       console.error('Failed to load profile:', error);
       addToast('Failed to load profile', 'error');
@@ -79,6 +81,7 @@ export default function ProfilePage() {
       const response = await api.put('/api/profile/me', {
         full_name: fullName,
         email: email,
+        phone_number: phoneNumber, // Include phone number in update
       });
 
       setProfile(response.data);
@@ -204,17 +207,32 @@ export default function ProfilePage() {
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full h-12 bg-black/20 border border-white/5 rounded-xl px-4 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent-blue/50 transition-all"
                   />
-                </div>
+                  </div>
+                  </div>
 
-                <button
+                  {/* Phone Number Configuration */}
+                  <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Contact Number</label>
+                  <div className="relative group">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-accent-blue transition-colors" />
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+1234567890"
+                    className="w-full h-12 bg-black/20 border border-white/5 rounded-xl px-4 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent-blue/50 transition-all"
+                  />
+                  </div>
+                  </div>
+
+                  <button
                   onClick={handleUpdateProfile}
                   disabled={saving}
                   className="flex items-center gap-2 px-8 h-12 bg-accent-blue hover:bg-accent-blueDark text-white font-black text-xs uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-accent-blue/20 disabled:opacity-50"
-                >
+                  >
                   <Save className="w-4 h-4" />
                   {saving ? 'Syncing...' : 'Update Protocol'}
-                </button>
-              </div>
+                  </button>
             </div>
 
             {/* Security Overrides */}

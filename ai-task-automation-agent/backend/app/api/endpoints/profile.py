@@ -75,6 +75,9 @@ def update_profile(
     if profile_data.full_name:
         current_user.full_name = profile_data.full_name
 
+    if profile_data.phone_number:
+        current_user.phone_number = profile_data.phone_number
+
     db.commit()
     db.refresh(current_user)
 

@@ -9,6 +9,7 @@ from datetime import datetime
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
+    phone_number: Optional[str] = None
 
 
 class PasswordChange(BaseModel):

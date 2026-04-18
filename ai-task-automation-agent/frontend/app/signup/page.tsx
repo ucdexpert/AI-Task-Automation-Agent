@@ -8,9 +8,10 @@ import Link from 'next/link';
 import { Bot, Mail, Lock, User, Loader2, ArrowRight, Sparkles } from 'lucide-react';
 
 export default function SignupPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [fullName, setFullName] = useState<string>('');
+  const [phoneNumber, setPhoneNumber] = useState<string>(''); // Added phoneNumber state
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const { addToast } = useToast();
@@ -21,7 +22,8 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      await register(email, password, fullName);
+      // Pass phoneNumber to the register function
+      await register(email, password, fullName, phoneNumber);
       addToast('Identity created! Welcome to AgentX.', 'success');
       router.push('/dashboard');
     } catch (error) {
@@ -58,8 +60,22 @@ export default function SignupPage() {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Uzair Khilji"
+                  placeholder="Jane Doe"
                   required
+                  className="w-full h-12 bg-black/20 border border-white/5 rounded-xl pl-12 pr-4 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent-blue/50 transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Phone Number</label>
+              <div className="relative group">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-accent-blue transition-colors" />
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="+1234567890"
                   className="w-full h-12 bg-black/20 border border-white/5 rounded-xl pl-12 pr-4 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent-blue/50 transition-all"
                 />
               </div>
