@@ -5,7 +5,8 @@ from googleapiclient.discovery import build
 from datetime import datetime, timezone
 
 # JSON file path
-CREDENTIALS_FILE = "d:\\Randum-Project\\ai-task-automation-agent\\backend\\agent493216-Be1814094638.json"
+import os
+CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "agent493216-Be1814094638.json")
 
 print("=" * 60)
 print("Google Calendar Test")
