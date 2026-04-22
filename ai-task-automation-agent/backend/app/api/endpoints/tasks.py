@@ -11,13 +11,43 @@ from app.schemas.task import TaskCreate, TaskResponse, TaskListResponse
 from app.agents.orchestrator import MultiAgentOrchestrator
 from app.dependencies import get_current_user_optional, get_current_user
 from app.models.user import User
-from app.services.email_service import send_task_completion_email
+from app.services.email_service import send_task_completion_email, send_email
 from app.services.websocket_service import manager
+from app.tools.whatsapp_tool import WhatsAppTool
 from app.utils.exceptions import NotFoundException
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+whatsapp_tool = WhatsAppTool()
+
+async def send_task_notifications(user: User, task: Task, is_creation: bool = True):
+    """Helper to send notifications via Email and WhatsApp"""
+    try:
+        user_name = user.full_name or "User"
+        status_msg = "created and is being processed" if is_creation else f"has been {task.status}"
+        subject = f"AI Agent: Task {task.id} {task.status if not is_creation else 'Created'}"
+        message = f"Hello {user_name},\n\nYour task '{task.user_input}' {status_msg}.\n\nTask ID: {task.id}"
+        
+        # 1. Send Email
+        if user.email:
+            if is_creation:
+                send_email(user.email, subject, message)
+            else:
+                send_task_completion_email(
+                    to_email=user.email,
+                    user_name=user_name,
+                    task_description=task.user_input,
+                    status=task.status,
+                    task_id=task.id
+                )
+        
+        # 2. Send WhatsApp
+        if user.phone_number:
+            await whatsapp_tool.send_text_message(message, user.phone_number)
+            
+    except Exception as e:
+        logger.error(f"Failed to send task notifications: {e}")
 
 async def run_task_background(task_id: int, session_id: str, current_user_id: Optional[int]):
     """Background worker for processing tasks"""
@@ -47,17 +77,8 @@ async def run_task_background(task_id: int, session_id: str, current_user_id: Op
 
         if current_user_id:
             user = db.query(User).filter(User.id == current_user_id).first()
-            if user and user.email:
-                try:
-                    send_task_completion_email(
-                        to_email=user.email,
-                        user_name=user.full_name or "User",
-                        task_description=task.user_input,
-                        status=task.status,
-                        task_id=task.id
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send email notification: {e}")
+            if user:
+                await send_task_notifications(user, task, is_creation=False)
     except Exception as e:
         logger.error(f"Error in background task: {e}")
         db.rollback()
@@ -88,6 +109,9 @@ async def execute_task(
     db.add(task)
     db.commit()
     db.refresh(task)
+
+    # Send creation notifications
+    await send_task_notifications(current_user, task, is_creation=True)
 
     background_tasks.add_task(run_task_background, task.id, session_id, current_user.id)
     return TaskResponse.model_validate(task)

@@ -1,5 +1,6 @@
 'use client';
 
+import PasswordInput from '@/components/ui/PasswordInput';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
@@ -23,7 +24,7 @@ export default function SignupPage() {
 
     try {
       // Pass phoneNumber to the register function
-      await register(email, password, fullName, phoneNumber);
+      await register(email, password, fullName);
       addToast('Identity created! Welcome to AgentX.', 'success');
       router.push('/dashboard');
     } catch (error) {
@@ -98,17 +99,13 @@ export default function SignupPage() {
 
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Access Protocol</label>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-accent-blue transition-colors" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
-                  required
-                  className="w-full h-12 bg-black/20 border border-white/5 rounded-xl pl-12 pr-4 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent-blue/50 transition-all"
-                />
-              </div>
+              <PasswordInput
+                label="" // Label is not needed as it's redundant with the one above
+                value={password}
+                onChange={setPassword}
+                placeholder="Minimum 8 characters"
+                // No error prop needed for now, as error handling is basic
+              />
             </div>
 
             <button

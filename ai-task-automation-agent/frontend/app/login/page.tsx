@@ -1,5 +1,6 @@
 'use client';
 
+import PasswordInput from '@/components/ui/PasswordInput';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
@@ -9,7 +10,9 @@ import { Bot, Mail, Lock, Loader2, ArrowRight, Sparkles } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string>('');
   const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const { addToast } = useToast();
@@ -17,6 +20,9 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Clear previous errors
+    setEmailError('');
+    setPasswordError('');
     setIsLoading(true);
 
     try {
@@ -24,6 +30,8 @@ export default function LoginPage() {
       addToast('Welcome back to AgentX!', 'success');
       router.push('/dashboard');
     } catch (error) {
+      // Generic error message for invalid credentials
+      setPasswordError('Login failed. Please verify your email and password.');
       addToast('Invalid email or password', 'error');
     } finally {
       setIsLoading(false);
@@ -56,27 +64,30 @@ export default function LoginPage() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailError(''); // Clear error on input change
+                  }}
                   placeholder="name@company.com"
                   required
-                  className="w-full h-12 bg-black/20 border border-white/5 rounded-xl pl-12 pr-4 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent-blue/50 transition-all"
+                  className={`w-full h-12 bg-black/20 border ${emailError ? 'border-accent-red' : 'border-white/5'} rounded-xl pl-12 pr-4 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent-blue/50 transition-all`}
                 />
               </div>
+              {emailError && <p className="text-xs text-accent-red mt-1">{emailError}</p>}
             </div>
 
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Secure Protocol</label>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-accent-blue transition-colors" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="w-full h-12 bg-black/20 border border-white/5 rounded-xl pl-12 pr-4 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent-blue/50 transition-all"
-                />
-              </div>
+              <PasswordInput
+                label="" // Label is not needed as it's redundant with the one above
+                value={password}
+                onChange={(newPassword) => {
+                  setPassword(newPassword);
+                  setPasswordError(''); // Clear error on input change
+                }}
+                placeholder="••••••••"
+                error={passwordError} // Pass the error state to PasswordInput
+              />
             </div>
 
             <button
@@ -110,3 +121,6 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+

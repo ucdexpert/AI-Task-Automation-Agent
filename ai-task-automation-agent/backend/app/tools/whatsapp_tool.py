@@ -22,7 +22,28 @@ class WhatsAppTool(BaseTool):
         operation = kwargs.get("operation", "send_text")
         if operation == "send_text":
             return await self.send_text_message(kwargs.get("message"), kwargs.get("to_number"))
+        elif operation == "send_template":
+            return await self.send_template_message(
+                template_name=kwargs.get("template_name"),
+                to_number=kwargs.get("to_number"),
+                language=kwargs.get("language", "en_US"),
+                components=kwargs.get("components", [])
+            )
         return {"success": False, "message": f"Unsupported operation: {operation}"}
+
+    async def send_template_message(self, template_name: str, to_number: str, language: str = "en_US", components: list = []) -> Dict[str, Any]:
+        """Send a pre-approved template message"""
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": language},
+                "components": components
+            }
+        }
+        return await self._send_request(payload)
 
     async def send_text_message(self, message: str, to_number: Optional[str] = None) -> Dict[str, Any]:
         recipient = to_number or settings.WHATSAPP_RECIPIENT_NUMBER
@@ -35,7 +56,10 @@ class WhatsAppTool(BaseTool):
             "type": "text",
             "text": {"body": message},
         }
+        return await self._send_request(payload)
 
+    async def _send_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        recipient = payload.get("to")
         try:
             client = await http_client.get_client()
             url = f"{self.base_url}/messages"
